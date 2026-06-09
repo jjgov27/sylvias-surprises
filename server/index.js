@@ -159,6 +159,19 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
+// Public: delete staff member (from admin panel)
+app.post('/api/auth/delete-staff', (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: 'Missing staff id' });
+    db.prepare('DELETE FROM sylvias_staff WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete staff error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // SQL Query (SELECT)
 app.post('/api/sql/query', requireAuth, (req, res) => {
   try {
