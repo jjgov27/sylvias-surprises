@@ -198,7 +198,7 @@ print('OK')
       await window.tasklet.writeFileToDisk('/tmp/gen_ledger_pdf.py', script);
       await window.tasklet.writeFileToDisk('/tmp/ledger_data.json', dataJson);
       const result = await window.tasklet.runCommand(
-        `cd /tmp && uv run --with reportlab python3 gen_ledger_pdf.py "$(cat /tmp/ledger_data.json)"`, 120);
+        `cd /tmp && python3 gen_ledger_pdf.py "$(cat /tmp/ledger_data.json)"`, 120);
       if (result.exitCode === 0) {
         const b64 = await window.tasklet.runCommand(`base64 -w0 '${outPath}'`);
         if (b64.exitCode === 0 && b64.log) {

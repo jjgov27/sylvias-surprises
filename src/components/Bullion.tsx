@@ -454,7 +454,7 @@ c.save()
 print("OK")
 `;
       await window.tasklet.writeFileToDisk('/tmp/gen_bullion_receipt.py', pyScript);
-      const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab gen_bullion_receipt.py', 120);
+      const result = await window.tasklet.runCommand('cd /tmp && python3 gen_bullion_receipt.py', 120);
 
       if (!result.log.includes('OK')) {
         setErr('PDF generation failed: ' + result.log);
@@ -676,7 +676,7 @@ c.save()
 print("OK")
 `;
       await window.tasklet.writeFileToDisk('/tmp/gen_bullion_holding.py', pyScript);
-      const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab gen_bullion_holding.py', 120);
+      const result = await window.tasklet.runCommand('cd /tmp && python3 gen_bullion_holding.py', 120);
       
       if (!result.log.includes('OK')) {
         setErr('PDF generation failed: ' + result.log);

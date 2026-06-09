@@ -180,7 +180,7 @@ print("OK")
 `;
 
   await window.tasklet.writeFileToDisk('/tmp/gen_credit_note.py', script);
-  const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab gen_credit_note.py', 120);
+  const result = await window.tasklet.runCommand('cd /tmp && python3 gen_credit_note.py', 120);
 
   if (!result.log.includes('OK')) {
     throw new Error('Failed to generate credit note PDF: ' + result.log);

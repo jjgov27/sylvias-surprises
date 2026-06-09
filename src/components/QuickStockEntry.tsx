@@ -251,7 +251,7 @@ export const QuickStockEntry: React.FC<QuickStockEntryProps> = ({ currentUser, o
         const tmpPath = `/tmp/quick_import_${Date.now()}.xlsx`;
         await window.tasklet.writeFileToDisk(tmpPath, `__BASE64__${base64}`);
         const result = await window.tasklet.runCommand(
-          `cd /tmp && uv run --with openpyxl python3 -c "
+          `cd /tmp && python3 -c "
 import openpyxl, csv, sys, io
 wb = openpyxl.load_workbook('${tmpPath.split('/').pop()}')
 ws = wb.active

@@ -245,7 +245,7 @@ print('OK')
       await window.tasklet.writeFileToDisk('/tmp/gen_expenses_pdf.py', script);
       await window.tasklet.writeFileToDisk('/tmp/expenses_data.json', dataJson);
       const result = await window.tasklet.runCommand(
-        `cd /tmp && uv run --with reportlab python3 gen_expenses_pdf.py "$(cat /tmp/expenses_data.json)"`, 120);
+        `cd /tmp && python3 gen_expenses_pdf.py "$(cat /tmp/expenses_data.json)"`, 120);
       if (result.exitCode === 0) {
         const b64 = await window.tasklet.runCommand(`base64 -w0 '${outPath}'`);
         if (b64.exitCode === 0 && b64.log) {

@@ -333,7 +333,7 @@ print('OK')
 `;
 
       await window.tasklet.writeFileToDisk('/tmp/gen_gift_voucher.py', script);
-      const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab python3 gen_gift_voucher.py', 120);
+      const result = await window.tasklet.runCommand('cd /tmp && python3 gen_gift_voucher.py', 120);
       if (!result.log.includes('OK')) throw new Error(result.log);
 
       const b64Result = await window.tasklet.runCommand(`base64 -w0 ${outputPath}`);

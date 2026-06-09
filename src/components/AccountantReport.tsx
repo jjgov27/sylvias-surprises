@@ -633,7 +633,7 @@ print('OK')
       await window.tasklet.writeFileToDisk(scriptPath, script);
 
       const result = await window.tasklet.runCommand(
-        `cd /tmp && uv run --with reportlab python3 gen_acct_pack.py`,
+        `cd /tmp && python3 gen_acct_pack.py`,
         120
       );
 
