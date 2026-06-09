@@ -180,6 +180,10 @@ export default function App() {
       const zoom = await getSetting('ui_zoom');
       if (zoom) setUiZoom(parseFloat(zoom));
       setLoading(false);
+    }).catch(() => {
+      // DB init may fail if not authenticated yet (401) — that's OK,
+      // tables are created server-side. Show the front page anyway.
+      setLoading(false);
     });
   }, []);
 

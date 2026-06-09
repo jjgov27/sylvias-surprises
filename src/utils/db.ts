@@ -396,7 +396,14 @@ export async function initDB(): Promise<void> {
       "SELECT name FROM sqlite_master WHERE type='table' AND name='sylvias_supplier_invoices'"
     );
     if (check.length > 0) tablesExist = true;
-  } catch { /* table doesn't exist yet, run full init */ }
+  } catch (e: any) {
+    // If 401/auth error, tables are created server-side — just skip client init
+    if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
+      initialized = true;
+      return;
+    }
+    /* table doesn't exist yet, run full init */
+  }
 
   if (!tablesExist) {
     // Run CREATE TABLE statements in batches of 5 to reduce bridge calls
