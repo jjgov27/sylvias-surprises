@@ -8,8 +8,7 @@
     "dev:server": "node server/index.js",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production node server/index.js",
-    "postinstall": "npx vite build --config vite.config.ts"
+    "start": "NODE_ENV=production node server/index.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
