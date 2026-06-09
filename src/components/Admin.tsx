@@ -389,7 +389,7 @@ export function Admin({ currentUser }: Props) {
                     </div>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{s.name}</div>
-                      <div style={{ fontSize: 12, color: '#9ca3af' }}>Joined {new Date(s.created_at).toLocaleDateString('en-GB')}</div>
+                      <div style={{ fontSize: 12, color: '#9ca3af' }}>{s.created_at ? `Joined ${new Date(s.created_at).toLocaleDateString('en-GB')}` : ''}</div>
                     </div>
                     {s.id === currentUser.id && <span style={{ background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, marginLeft: 8 }}>You</span>}
                   </div>
