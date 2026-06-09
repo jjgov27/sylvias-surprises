@@ -33,6 +33,11 @@ app.use(session({
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 function requireAuth(req, res, next) {
   if (req.session && req.session.user) return next();
   res.status(401).json({ error: 'Not authenticated' });
