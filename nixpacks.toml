@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ['nodejs_20', 'python312', 'python312Packages.reportlab']
+
+[phases.install]
+cmds = ['npm install']
+
+[phases.build]
+cmds = ['npx vite build --config vite.config.ts']
+
+[start]
+cmd = 'node server/index.js'
