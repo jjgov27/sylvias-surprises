@@ -31,7 +31,7 @@ const bridge = {
   },
 
   // Shell commands — used by PDF generation in components
-  async runCommand(command: string, timeout?: number): Promise<{ log: string }> {
+  async runCommand(command: string, timeout?: number): Promise<{ log: string; exitCode: number }> {
     return apiFetch('/api/command', { command, timeout });
   },
 

@@ -233,10 +233,10 @@ app.post('/api/command', requireAuth, (req, res) => {
       maxBuffer: 50 * 1024 * 1024,
       cwd: '/tmp'
     });
-    res.json({ log: result || '' });
+    res.json({ log: result || '', exitCode: 0 });
   } catch (err) {
-    if (err.stdout) return res.json({ log: err.stdout });
-    res.status(500).json({ error: err.message, log: err.stderr || '' });
+    if (err.stdout) return res.json({ log: err.stdout, exitCode: err.status || 1 });
+    res.status(500).json({ error: err.message, log: err.stderr || '', exitCode: err.status || 1 });
   }
 });
 
