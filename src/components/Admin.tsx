@@ -137,6 +137,11 @@ export function Admin({ currentUser }: Props) {
     loadCats();
   }, [loadSettings, loadAccounts, loadCounts, loadCats]);
 
+  // Reload staff list when switching to Staff tab
+  useEffect(() => {
+    if (tab === 'staff') loadStaffList();
+  }, [tab]);
+
   const handleSettingChange = (key: string, value: string) => {
     setDirty(prev => ({ ...prev, [key]: value }));
   };
