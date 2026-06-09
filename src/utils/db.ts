@@ -446,6 +446,11 @@ export async function addStaffUser(name: string, initials: string): Promise<void
   );
 }
 
+export async function deleteStaffUser(id: number): Promise<void> {
+  await sqlExec("DELETE FROM sylvias_staff WHERE id = ?", [id]);
+}
+
+
 export async function getStaffByInitials(initials: string): Promise<StaffUser | null> {
   const rows = await window.tasklet.sqlQuery(
     `SELECT * FROM sylvias_staff WHERE initials = '${esc(initials.toUpperCase())}'`
