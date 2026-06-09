@@ -21,6 +21,79 @@ fs.mkdirSync('/tmp/sylvias-pdfs', { recursive: true });
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
+// ── Initialize database tables on server startup ──
+const INIT_TABLES = [
+  "CREATE TABLE IF NOT EXISTS sylvias_staff (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, initials TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, part_number TEXT NOT NULL, description TEXT NOT NULL, photo TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL DEFAULT 0, location TEXT NOT NULL DEFAULT '', cost REAL NOT NULL DEFAULT 0, rrp REAL NOT NULL DEFAULT 0, entered_by TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'Other', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_item_names (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)",
+  "CREATE TABLE IF NOT EXISTS sylvias_sales (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_date TEXT NOT NULL DEFAULT (datetime('now')), customer_name TEXT NOT NULL DEFAULT 'Walk-in', payment_method TEXT NOT NULL DEFAULT 'cash', total REAL NOT NULL DEFAULT 0, sold_by TEXT NOT NULL DEFAULT '', invoice_number TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_sale_items (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER NOT NULL, stock_id INTEGER NOT NULL, part_number TEXT NOT NULL, description TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 1, unit_price REAL NOT NULL DEFAULT 0, line_total REAL NOT NULL DEFAULT 0)",
+  "CREATE TABLE IF NOT EXISTS sylvias_customers (id INTEGER PRIMARY KEY AUTOINCREMENT, salutation TEXT NOT NULL DEFAULT '', first_name TEXT NOT NULL DEFAULT '', surname TEXT NOT NULL DEFAULT '', address_line1 TEXT NOT NULL DEFAULT '', address_line2 TEXT NOT NULL DEFAULT '', address_line3 TEXT NOT NULL DEFAULT '', postcode TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_expenses (id INTEGER PRIMARY KEY AUTOINCREMENT, expense_date TEXT NOT NULL DEFAULT (date('now')), category TEXT NOT NULL DEFAULT 'General', description TEXT NOT NULL DEFAULT '', amount REAL NOT NULL DEFAULT 0, receipt_photo TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_float (id INTEGER PRIMARY KEY AUTOINCREMENT, float_date TEXT NOT NULL DEFAULT (date('now')), opening_amount REAL NOT NULL DEFAULT 0, closing_amount REAL NOT NULL DEFAULT 0, cash_in REAL NOT NULL DEFAULT 0, cash_out REAL NOT NULL DEFAULT 0, difference REAL NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_consigners (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', commission_pct REAL NOT NULL DEFAULT 20, notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_consignment_stock (id INTEGER PRIMARY KEY AUTOINCREMENT, consigner_id INTEGER NOT NULL, consigner_name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL, qty INTEGER NOT NULL DEFAULT 1, selling_price REAL NOT NULL DEFAULT 0, commission_pct REAL NOT NULL DEFAULT 20, status TEXT NOT NULL DEFAULT 'available', date_received TEXT NOT NULL DEFAULT (date('now')), notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), qty_sold INTEGER NOT NULL DEFAULT 0, qty_remaining INTEGER NOT NULL DEFAULT 1)",
+  "CREATE TABLE IF NOT EXISTS sylvias_reservations (id INTEGER PRIMARY KEY AUTOINCREMENT, stock_id INTEGER NOT NULL, stock_description TEXT NOT NULL DEFAULT '', stock_part_number TEXT NOT NULL DEFAULT '', customer_id INTEGER, customer_name TEXT NOT NULL DEFAULT '', deposit REAL NOT NULL DEFAULT 0, total_price REAL NOT NULL DEFAULT 0, reserve_date TEXT NOT NULL DEFAULT (date('now')), expiry_date TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', notes TEXT NOT NULL DEFAULT '', reserved_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_wishlist (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, customer_name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'open', created_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_suppliers (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, source_type TEXT NOT NULL DEFAULT 'Other', contact_name TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_bullion (id INTEGER PRIMARY KEY AUTOINCREMENT, metal_type TEXT NOT NULL DEFAULT 'Gold', form TEXT NOT NULL DEFAULT 'Coin', description TEXT NOT NULL DEFAULT '', weight REAL NOT NULL DEFAULT 0, weight_unit TEXT NOT NULL DEFAULT 'oz', purity TEXT NOT NULL DEFAULT '999', purchase_date TEXT NOT NULL DEFAULT (date('now')), purchase_price REAL NOT NULL DEFAULT 0, premium_paid REAL NOT NULL DEFAULT 0, dealer_name TEXT NOT NULL DEFAULT '', sell_date TEXT NOT NULL DEFAULT '', sale_price REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'held', notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')",
+  "CREATE TABLE IF NOT EXISTS sylvias_bank_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, account_name TEXT NOT NULL DEFAULT '', bank_name TEXT NOT NULL DEFAULT '', sort_code TEXT NOT NULL DEFAULT '', account_number TEXT NOT NULL DEFAULT '', opening_balance REAL NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER NOT NULL, payment_date TEXT NOT NULL DEFAULT (date('now')), amount REAL NOT NULL DEFAULT 0, payment_method TEXT NOT NULL DEFAULT 'cash', notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_refunds (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER NOT NULL, invoice_number TEXT NOT NULL DEFAULT '', refund_date TEXT NOT NULL DEFAULT (date('now')), amount REAL NOT NULL DEFAULT 0, refund_method TEXT NOT NULL DEFAULT 'cash', reason TEXT NOT NULL DEFAULT '', items_restocked INTEGER NOT NULL DEFAULT 0, entered_by TEXT NOT NULL DEFAULT '', credit_note_number TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_credit_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, customer_name TEXT NOT NULL DEFAULT '', credit_note_number TEXT NOT NULL DEFAULT '', date_issued TEXT NOT NULL DEFAULT (date('now')), original_invoice TEXT NOT NULL DEFAULT '', amount REAL NOT NULL DEFAULT 0, amount_used REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_bank_transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, bank_account_id INTEGER NOT NULL, transaction_date TEXT NOT NULL DEFAULT (date('now')), description TEXT NOT NULL DEFAULT '', amount REAL NOT NULL DEFAULT 0, reference TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT 'other', linked_sale_id INTEGER, linked_expense_id INTEGER, reconciled INTEGER NOT NULL DEFAULT 0, entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_events (id INTEGER PRIMARY KEY AUTOINCREMENT, event_name TEXT NOT NULL DEFAULT '', location TEXT NOT NULL DEFAULT '', event_date TEXT NOT NULL DEFAULT (date('now')), end_date TEXT NOT NULL DEFAULT '', pitch_cost REAL NOT NULL DEFAULT 0, travel_cost REAL NOT NULL DEFAULT 0, other_costs REAL NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'planned', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_event_items (id INTEGER PRIMARY KEY AUTOINCREMENT, event_id INTEGER NOT NULL, stock_id INTEGER NOT NULL, description TEXT NOT NULL DEFAULT '', part_number TEXT NOT NULL DEFAULT '', qty_taken INTEGER NOT NULL DEFAULT 1, qty_sold INTEGER NOT NULL DEFAULT 0, sale_price REAL NOT NULL DEFAULT 0, cost_price REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_quotes (id INTEGER PRIMARY KEY AUTOINCREMENT, quote_number TEXT NOT NULL DEFAULT '', customer_id INTEGER, customer_name TEXT NOT NULL DEFAULT '', quote_date TEXT NOT NULL DEFAULT (date('now')), expiry_date TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft', notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_quote_items (id INTEGER PRIMARY KEY AUTOINCREMENT, quote_id INTEGER NOT NULL, stock_id INTEGER NOT NULL, description TEXT NOT NULL DEFAULT '', part_number TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL DEFAULT 1, unit_price REAL NOT NULL DEFAULT 0, line_total REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_gift_vouchers (id INTEGER PRIMARY KEY AUTOINCREMENT, voucher_number TEXT NOT NULL UNIQUE, amount REAL NOT NULL DEFAULT 0, amount_used REAL NOT NULL DEFAULT 0, balance REAL NOT NULL DEFAULT 0, purchaser_name TEXT NOT NULL DEFAULT '', purchaser_customer_id INTEGER DEFAULT NULL, recipient_name TEXT NOT NULL DEFAULT '', payment_method TEXT NOT NULL DEFAULT '', date_issued TEXT NOT NULL DEFAULT '', date_expires TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active', notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_supplier_invoices (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_ref TEXT NOT NULL DEFAULT '', supplier_id INTEGER DEFAULT NULL, supplier_name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', total_amount REAL NOT NULL DEFAULT 0, amount_paid REAL NOT NULL DEFAULT 0, balance_due REAL NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'unpaid', invoice_date TEXT NOT NULL DEFAULT (date('now')), due_date TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_supplier_invoice_payments (id INTEGER PRIMARY KEY AUTOINCREMENT, supplier_invoice_id INTEGER NOT NULL, payment_date TEXT NOT NULL DEFAULT (date('now')), amount REAL NOT NULL DEFAULT 0, payment_method TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', entered_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_scan_staging (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL DEFAULT '', part_number TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL DEFAULT 1, condition TEXT NOT NULL DEFAULT '', category TEXT NOT NULL DEFAULT '', location TEXT NOT NULL DEFAULT '', cost REAL NOT NULL DEFAULT 0, rrp REAL NOT NULL DEFAULT 0, offer_price REAL NOT NULL DEFAULT 0, acquisition_type TEXT NOT NULL DEFAULT 'existing', supplier_name TEXT NOT NULL DEFAULT '', source_type TEXT NOT NULL DEFAULT '', purchase_date TEXT NOT NULL DEFAULT '', payment_method TEXT NOT NULL DEFAULT '', purchased_by TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', scan_type TEXT NOT NULL DEFAULT 'single', scanned_by TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pending', scanned_at TEXT NOT NULL DEFAULT (datetime('now')))",
+];
+
+const ALTER_SQLS = [
+  "ALTER TABLE sylvias_sales ADD COLUMN customer_id INTEGER DEFAULT NULL",
+  "ALTER TABLE sylvias_stock ADD COLUMN on_offer INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sylvias_stock ADD COLUMN offer_price REAL NOT NULL DEFAULT 0",
+  "ALTER TABLE sylvias_stock ADD COLUMN supplier_id INTEGER DEFAULT NULL",
+  "ALTER TABLE sylvias_stock ADD COLUMN source_type TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_sale_items ADD COLUMN is_consignment INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sylvias_sale_items ADD COLUMN consignment_item_id INTEGER DEFAULT NULL",
+  "ALTER TABLE sylvias_bullion ADD COLUMN payment_method TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_bullion ADD COLUMN buyer_name TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_bullion ADD COLUMN customer_id INTEGER DEFAULT NULL",
+  "ALTER TABLE sylvias_sales ADD COLUMN amount_paid REAL NOT NULL DEFAULT 0",
+  "ALTER TABLE sylvias_sales ADD COLUMN balance_due REAL NOT NULL DEFAULT 0",
+  "ALTER TABLE sylvias_sales ADD COLUMN status TEXT NOT NULL DEFAULT 'paid'",
+  "ALTER TABLE sylvias_sales ADD COLUMN sale_type TEXT NOT NULL DEFAULT 'receipt'",
+  "ALTER TABLE sylvias_sales ADD COLUMN due_date TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_expenses ADD COLUMN payment_method TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_expenses ADD COLUMN paid_by TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock ADD COLUMN entry_type TEXT NOT NULL DEFAULT 'legacy'",
+  "ALTER TABLE sylvias_stock ADD COLUMN purchase_date TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock ADD COLUMN purchase_payment_method TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock ADD COLUMN purchased_by TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock ADD COLUMN no_partnumber_initials TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_suppliers ADD COLUMN postcode TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_gift_vouchers ADD COLUMN recipient_customer_id INTEGER DEFAULT NULL",
+  "ALTER TABLE sylvias_bullion ADD COLUMN purchase_payment_method TEXT NOT NULL DEFAULT ''",
+];
+
+// Create all tables
+for (const sql of INIT_TABLES) {
+  db.exec(sql);
+}
+
+// Run ALTER TABLE migrations (ignore "duplicate column" errors)
+for (const sql of ALTER_SQLS) {
+  try { db.exec(sql); } catch (e) { /* column already exists */ }
+}
+
+console.log('Database initialized with all tables');
+
+
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.text({ limit: '50mb' }));
