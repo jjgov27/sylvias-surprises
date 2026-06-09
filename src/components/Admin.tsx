@@ -231,7 +231,7 @@ export function Admin({ currentUser }: Props) {
       const res = await fetch('/api/auth/staff-list');
       if (res.ok) {
         const data = await res.json();
-        setStaffList(data.users || []);
+        setStaffList(Array.isArray(data) ? data : data.users || []);
       } else {
         const users = await getStaffUsers();
         setStaffList(users);
