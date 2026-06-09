@@ -130,6 +130,35 @@ app.get('/api/auth/check', (req, res) => {
   res.json(req.session?.user ? { authenticated: true, user: req.session.user } : { authenticated: false });
 });
 
+// Public: staff list for login screen (no auth required)
+app.get('/api/auth/staff-list', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT id, name, initials FROM sylvias_staff ORDER BY name').all();
+    res.json(rows);
+  } catch (err) {
+    console.error('Staff list error:', err.message);
+    res.json([]);
+  }
+});
+
+// Public: register new staff member (also sets session)
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const { name, initials } = req.body;
+    if (!name || !initials) return res.status(400).json({ error: 'Name and initials required' });
+    // Check if initials already taken
+    const existing = db.prepare("SELECT id FROM sylvias_staff WHERE UPPER(initials) = UPPER(?)").get(initials);
+    if (existing) return res.status(409).json({ error: 'Those initials are already taken. Try different ones.' });
+    db.prepare("INSERT INTO sylvias_staff (name, initials) VALUES (?, ?)").run(name, initials.toUpperCase());
+    const user = db.prepare("SELECT id, name, initials FROM sylvias_staff WHERE UPPER(initials) = UPPER(?)").get(initials.toUpperCase());
+    req.session.user = { name: user.name, initials: user.initials };
+    res.json({ ok: true, user });
+  } catch (err) {
+    console.error('Register error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // SQL Query (SELECT)
 app.post('/api/sql/query', requireAuth, (req, res) => {
   try {

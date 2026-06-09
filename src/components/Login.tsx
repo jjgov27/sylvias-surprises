@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LogIn, UserPlus, Users } from 'lucide-react';
 import { StaffUser } from '../types';
-import { getStaffUsers, addStaffUser, getStaffByInitials } from '../utils/db';
+// Staff data now fetched via public API endpoints (no auth needed)
 
 interface LoginProps {
   onLogin: (user: StaffUser) => void;
@@ -22,12 +22,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   }, []);
 
   async function loadStaff() {
-    const users = await getStaffUsers();
-    setStaffList(users);
-    setLoading(false);
-    if (users.length === 0) {
+    try {
+      // Use public staff-list endpoint (no auth needed)
+      const res = await fetch('/api/auth/staff-list', { credentials: 'include' });
+      const users = res.ok ? await res.json() : [];
+      setStaffList(users);
+      if (users.length === 0) setMode('register');
+    } catch {
+      // If fetch fails, show register mode
+      setStaffList([]);
       setMode('register');
     }
+    setLoading(false);
   }
 
   async function handleQuickLogin(user: StaffUser) {
@@ -40,12 +46,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
       setError('Please enter your initials');
       return;
     }
-    const user = await getStaffByInitials(initials.trim());
-    if (!user) {
-      setError('Initials not recognised. Please register first.');
-      return;
+    try {
+      const res = await fetch('/api/auth/staff-list', { credentials: 'include' });
+      const users = res.ok ? await res.json() : [];
+      const user = users.find((u: any) => u.initials?.toUpperCase() === initials.trim().toUpperCase());
+      if (!user) {
+        setError('Initials not recognised. Please register first.');
+        return;
+      }
+      onLogin(user);
+    } catch {
+      setError('Unable to verify initials. Please try again.');
     }
-    onLogin(user);
   }
 
   async function handleRegister() {
@@ -59,13 +71,20 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
       return;
     }
     try {
-      await addStaffUser(newName.trim(), newInitials.trim().toUpperCase());
-      const user = await getStaffByInitials(newInitials.trim());
-      if (user) {
-        onLogin(user);
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: newName.trim(), initials: newInitials.trim().toUpperCase() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Registration failed');
+        return;
       }
+      onLogin(data.user);
     } catch {
-      setError('Those initials are already taken. Try different ones.');
+      setError('Registration failed. Please try again.');
     }
   }
 
