@@ -288,61 +288,121 @@ import json, sys
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 check = json.loads(sys.argv[1])
 items = json.loads(sys.argv[2])
 
 doc = SimpleDocTemplate('/tmp/stockcheck.pdf', pagesize=A4,
-    topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+    topMargin=15*mm, bottomMargin=15*mm, leftMargin=12*mm, rightMargin=12*mm)
 styles = getSampleStyleSheet()
-title_style = ParagraphStyle('Title2', parent=styles['Title'], fontSize=16, spaceAfter=4*mm)
+title_style = ParagraphStyle('Title2', parent=styles['Title'], fontSize=16, spaceAfter=3*mm)
 sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=10, textColor=colors.grey)
-header_style = ParagraphStyle('Header', parent=styles['Normal'], fontSize=9, textColor=colors.white)
-cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9)
+cell_style = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, leading=10)
+cell_bold = ParagraphStyle('CellBold', parent=cell_style, fontName='Helvetica-Bold')
 small_style = ParagraphStyle('Small', parent=styles['Normal'], fontSize=8, textColor=colors.grey)
+note_style = ParagraphStyle('Note', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#b45309'))
+purple = colors.HexColor('#4338ca')
+red = colors.HexColor('#dc2626')
+
+check_type_label = 'Position Check: ' + check['location_filter'] if check['check_type'] == 'position' else 'Spot Check (' + check['location_filter'] + ')'
 
 story = []
-story.append(Paragraph("Sylvia's Surprises — Stock Check", title_style))
-story.append(Paragraph(f"Check {check['check_number']} — {'Position Check: ' + check['location_filter'] if check['check_type'] == 'position' else 'Spot Check (' + check['location_filter'] + ')'}", sub_style))
-story.append(Paragraph(f"Created by {check['started_by']} — {check['started_at'][:16]}", sub_style))
-story.append(Paragraph(f"Total items: {len(items)}", sub_style))
-story.append(Spacer(1, 6*mm))
 
-# Table
-data = [['✓', 'Item', 'Part No.', 'Location', 'Exp Qty', 'Notes']]
+# ═══════════════ PAGE 1 — CHECKLIST ═══════════════
+story.append(Paragraph("Sylvia's Surprises — Stock Check", title_style))
+story.append(Paragraph(f"Check {check['check_number']} — {check_type_label}", sub_style))
+story.append(Paragraph(f"Created by {check['started_by']} — {check['started_at'][:16]}  |  Total items: {len(items)}", sub_style))
+story.append(Spacer(1, 4*mm))
+
+data = [['✓', 'Item Description', 'Part No.', 'Location', 'Qty', 'Notes']]
 for item in items:
     data.append([
         '☐',
-        Paragraph(item['description'][:60], cell_style),
-        item['part_number'] or '—',
-        item['location'] or '—',
+        Paragraph(item['description'][:55], cell_style),
+        Paragraph(item['part_number'] or '—', cell_style),
+        Paragraph(item['location'] or '—', cell_style),
         str(item['expected_qty']),
         ''
     ])
 
-col_widths = [8*mm, 75*mm, 25*mm, 30*mm, 15*mm, 30*mm]
+col_widths = [8*mm, 68*mm, 22*mm, 25*mm, 12*mm, 51*mm]
 t = Table(data, colWidths=col_widths, repeatRows=1)
 t.setStyle(TableStyle([
-    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4338ca')),
+    ('BACKGROUND', (0, 0), (-1, 0), purple),
     ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-    ('FONTSIZE', (0, 0), (-1, 0), 9),
-    ('FONTSIZE', (0, 1), (-1, -1), 9),
+    ('FONTSIZE', (0, 0), (-1, 0), 8),
+    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, 1), (-1, -1), 8),
     ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
     ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ('TOPPADDING', (0, 0), (-1, -1), 3),
-    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ('TOPPADDING', (0, 1), (-1, -1), 3),
+    ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+    ('TOPPADDING', (0, 0), (-1, 0), 4),
+    ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
     ('ALIGN', (0, 0), (0, -1), 'CENTER'),
     ('ALIGN', (4, 0), (4, -1), 'CENTER'),
 ]))
 story.append(t)
 
+story.append(Spacer(1, 8*mm))
+story.append(Paragraph("Checked by: ______________________________    Date: _______________    Signature: ______________________________", sub_style))
+story.append(Spacer(1, 4*mm))
+story.append(Paragraph("All items present & correct?   YES  /  NO        If NO — note discrepancies/damage overleaf.", note_style))
+
+# ═══════════════ PAGE 2 — DISCREPANCIES & DAMAGE ═══════════════
+story.append(PageBreak())
+story.append(Paragraph("Discrepancies / Damage Report", title_style))
+story.append(Paragraph(f"Check {check['check_number']} — {check_type_label}", sub_style))
+story.append(Paragraph(f"{check['started_at'][:16]}  |  Total items: {len(items)}", sub_style))
+story.append(Spacer(1, 4*mm))
+story.append(Paragraph("Record any items not found, wrong quantity, damaged, or requiring attention below:", note_style))
+story.append(Spacer(1, 3*mm))
+
+data2 = [['Item Description', 'Part No.', 'Location', 'Expected', 'Found', 'Issue / Notes']]
+for item in items:
+    data2.append([
+        Paragraph(item['description'][:50], cell_style),
+        Paragraph(item['part_number'] or '—', cell_style),
+        Paragraph(item['location'] or '—', cell_style),
+        str(item['expected_qty']),
+        '',
+        ''
+    ])
+
+col_widths2 = [60*mm, 22*mm, 22*mm, 14*mm, 14*mm, 54*mm]
+t2 = Table(data2, colWidths=col_widths2, repeatRows=1)
+t2.setStyle(TableStyle([
+    ('BACKGROUND', (0, 0), (-1, 0), red),
+    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+    ('FONTSIZE', (0, 0), (-1, 0), 8),
+    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, 1), (-1, -1), 8),
+    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#fef2f2')]),
+    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d1d5db')),
+    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ('TOPPADDING', (0, 1), (-1, -1), 3),
+    ('BOTTOMPADDING', (0, 1), (-1, -1), 3),
+    ('TOPPADDING', (0, 0), (-1, 0), 4),
+    ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+    ('ALIGN', (3, 0), (4, -1), 'CENTER'),
+]))
+story.append(t2)
+
+story.append(Spacer(1, 8*mm))
+story.append(Paragraph("Summary of discrepancies:", sub_style))
+story.append(Spacer(1, 15*mm))
+story.append(Paragraph("_" * 120, small_style))
+story.append(Spacer(1, 8*mm))
+story.append(Paragraph("_" * 120, small_style))
+story.append(Spacer(1, 8*mm))
+story.append(Paragraph("_" * 120, small_style))
 story.append(Spacer(1, 10*mm))
-story.append(Paragraph("Checked by: ____________________    Date: _______________    Signature: ____________________", sub_style))
+story.append(Paragraph("Reported by: ______________________________    Date: _______________    Signature: ______________________________", sub_style))
 story.append(Spacer(1, 5*mm))
-story.append(Paragraph("All items present?  YES  /  NO      If NO — list discrepancies overleaf and submit on screen.", small_style))
+story.append(Paragraph("Action taken: ______________________________________________________________________________________________", sub_style))
 
 doc.build(story)
 print('OK')
