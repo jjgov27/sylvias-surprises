@@ -394,7 +394,7 @@ export const PurchaseStock: React.FC<PurchaseStockProps> = ({ currentUser, onSav
                   selected={null}
                   onSelect={(s) => {
                     const sup = s as Supplier;
-                    setSupplierId(String(sup.id));
+                    setSupplierId(sup.id);
                     setShowNewSupplier(false);
                   }}
                 />

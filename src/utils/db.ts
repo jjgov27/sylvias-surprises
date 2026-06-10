@@ -447,7 +447,7 @@ export async function addStaffUser(name: string, initials: string): Promise<void
 }
 
 export async function deleteStaffUser(id: number): Promise<void> {
-  await sqlExec("DELETE FROM sylvias_staff WHERE id = ?", [id]);
+  await window.tasklet.sqlExec(`DELETE FROM sylvias_staff WHERE id = ${id}`);
 }
 
 

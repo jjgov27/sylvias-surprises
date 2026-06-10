@@ -171,7 +171,7 @@ export const StockControl: React.FC<StockControlProps> = ({ currentUser, onEdit,
       String(item.cost || 0),
       String(item.rrp || 0),
       String(item.offer_price || ''),
-      item.offer_active ? 'Yes' : 'No',
+      item.on_offer ? 'Yes' : 'No',
       item.entered_by || '',
       item.created_at || ''
     ].map(escapeCsvField));
