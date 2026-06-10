@@ -30,6 +30,7 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
   const [dueDate, setDueDate] = useState('');
   const [partialAmount, setPartialAmount] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
+  const [printReceipt, setPrintReceipt] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [overrideItemId, setOverrideItemId] = useState<number | null>(null);
   const [overrideInitials, setOverrideInitials] = useState('');
@@ -1094,7 +1095,7 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
               {/* Complete sale buttons */}
               <div className="mt-4 flex gap-2 flex-wrap">
                 <button
-                  className="btn btn-primary btn-lg gap-2 flex-1"
+                  className="btn btn-success btn-lg gap-2 flex-1"
                   onClick={() => {
                     if (tradeInEnabled && !tradeInDesc.trim()) {
                       alert('Please enter a description for the trade-in item');
@@ -1104,11 +1105,30 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
                       alert('Please enter a trade-in allowance value');
                       return;
                     }
+                    setPrintReceipt(true);
                     setShowConfirm(true);
                   }}
                   disabled={processing}
                 >
-                  <CheckCircle size={20} /> {saleType === 'invoice' ? 'Create Invoice' : 'Complete Sale'} — £{(tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) && (tradeInAmount + creditNoteAmount + giftVoucherAmount) > 0 ? effectiveTotal.toFixed(2) + ' to pay' : cartTotal.toFixed(2)}
+                  <CheckCircle size={20} /> {saleType === 'invoice' ? 'Create Invoice + Print' : 'Sale + Receipt'} — £{(tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) && (tradeInAmount + creditNoteAmount + giftVoucherAmount) > 0 ? effectiveTotal.toFixed(2) + ' to pay' : cartTotal.toFixed(2)}
+                </button>
+                <button
+                  className="btn btn-outline btn-warning btn-lg gap-2 flex-1"
+                  onClick={() => {
+                    if (tradeInEnabled && !tradeInDesc.trim()) {
+                      alert('Please enter a description for the trade-in item');
+                      return;
+                    }
+                    if (tradeInEnabled && tradeInAmount <= 0) {
+                      alert('Please enter a trade-in allowance value');
+                      return;
+                    }
+                    setPrintReceipt(false);
+                    setShowConfirm(true);
+                  }}
+                  disabled={processing}
+                >
+                  <CheckCircle size={20} /> {saleType === 'invoice' ? 'Create Invoice — No Print' : 'Sale — No Receipt'}
                 </button>
               </div>
             </>
@@ -1215,28 +1235,23 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
               )}
               <p className="text-xl font-bold text-primary mt-2">Total: £{cartTotal.toFixed(2)}</p>
             </div>
-            <p className="text-sm text-base-content/70 mb-2">
-              How would you like to complete this {saleType === 'invoice' ? 'invoice' : 'sale'}?
-            </p>
+            <div className={`alert ${printReceipt ? 'alert-success' : 'alert-warning'} mt-2`}>
+              {printReceipt
+                ? <span>📄 Receipt / invoice will be generated</span>
+                : <span>🚫 No receipt — sale recorded only</span>
+              }
+            </div>
             <div className="modal-action flex-col gap-2 sm:flex-row">
               <button className="btn btn-ghost" onClick={() => setShowConfirm(false)} disabled={processing}>
                 Go Back
               </button>
               <button
-                className="btn btn-outline btn-success gap-2"
-                onClick={() => completeSale(false)}
+                className={`btn ${printReceipt ? 'btn-success' : 'btn-warning'} gap-2`}
+                onClick={() => completeSale(printReceipt)}
                 disabled={processing}
               >
                 {processing ? <span className="loading loading-spinner loading-sm" /> : <CheckCircle size={18} />}
-                {saleType === 'invoice' ? 'Create Invoice' : 'Sale'} — No Receipt
-              </button>
-              <button
-                className="btn btn-primary gap-2"
-                onClick={() => completeSale(true)}
-                disabled={processing}
-              >
-                {processing ? <span className="loading loading-spinner loading-sm" /> : <CheckCircle size={18} />}
-                {saleType === 'invoice' ? 'Create Invoice' : 'Sale'} + Print
+                Confirm {saleType === 'invoice' ? 'Invoice' : 'Sale'}
               </button>
             </div>
           </div>
