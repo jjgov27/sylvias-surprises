@@ -2937,3 +2937,11 @@ export async function deleteExpenseById(id: number): Promise<void> {
 export async function deleteSupplierById(id: number): Promise<void> {
   await window.tasklet.sqlExec(`DELETE FROM sylvias_suppliers WHERE id = ${id}`);
 }
+
+export async function searchStockInStock(query: string): Promise<StockItem[]> {
+  const q = esc(query);
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT * FROM sylvias_stock WHERE (description LIKE '%${q}%' OR part_number LIKE '%${q}%' OR location LIKE '%${q}%') AND quantity > 0 ORDER BY description ASC`
+  );
+  return rows as unknown as StockItem[];
+}

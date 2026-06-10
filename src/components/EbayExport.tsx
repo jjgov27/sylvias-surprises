@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { StockItem, StaffUser } from '../types';
-import { getStock } from '../utils/db';
+import { getAllStock as getStock } from '../utils/db';
 import { Package, Download, CheckSquare, Square, Filter, Search, ShoppingBag, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
