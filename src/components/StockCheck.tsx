@@ -91,6 +91,8 @@ export function StockCheck({ currentUser }: Props) {
     try { await window.tasklet.sqlExec("ALTER TABLE sylvias_stock_checks ADD COLUMN check_number TEXT NOT NULL DEFAULT ''"); } catch {}
     try { await window.tasklet.sqlExec("ALTER TABLE sylvias_stock_checks ADD COLUMN signed_by TEXT NOT NULL DEFAULT ''"); } catch {}
     try { await window.tasklet.sqlExec("ALTER TABLE sylvias_stock_checks ADD COLUMN signed_at TEXT NOT NULL DEFAULT ''"); } catch {}
+    try { await window.tasklet.sqlExec("ALTER TABLE sylvias_stock_check_items ADD COLUMN checked INTEGER NOT NULL DEFAULT 0"); } catch {}
+    try { await window.tasklet.sqlExec("ALTER TABLE sylvias_stock_check_items ADD COLUMN notes TEXT NOT NULL DEFAULT ''"); } catch {}
   }, []);
 
   /* ── Load locations ── */
