@@ -54,6 +54,7 @@ export function StockCheck({ currentUser }: Props) {
   const [msg, setMsg] = useState('');
   const [confirmAction, setConfirmAction] = useState<{ text: string; onYes: () => void } | null>(null);
   const [signName, setSignName] = useState('');
+  const [submitConfirm, setSubmitConfirm] = useState(false);
   const [searchHistory, setSearchHistory] = useState('');
   const [yearFilter, setYearFilter] = useState(new Date().getFullYear().toString());
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -411,15 +412,15 @@ story.append(t2)
 story.append(Spacer(1, 8*mm))
 story.append(Paragraph("Summary of discrepancies:", sub_style))
 story.append(Spacer(1, 15*mm))
-story.append(Paragraph("_" * 120, small_style))
+story.append(Paragraph("_" * 85, small_style))
 story.append(Spacer(1, 8*mm))
-story.append(Paragraph("_" * 120, small_style))
+story.append(Paragraph("_" * 85, small_style))
 story.append(Spacer(1, 8*mm))
-story.append(Paragraph("_" * 120, small_style))
+story.append(Paragraph("_" * 85, small_style))
 story.append(Spacer(1, 10*mm))
-story.append(Paragraph("Reported by: ______________________________    Date: _______________    Signature: ______________________________", sub_style))
+story.append(Paragraph("Reported by: _______________________    Date: ____________    Signature: _______________________", sub_style))
 story.append(Spacer(1, 5*mm))
-story.append(Paragraph("Action taken: ______________________________________________________________________________________________", sub_style))
+story.append(Paragraph("Action taken: _____________________________________________________________________________", sub_style))
 
 doc.build(story)
 print('OK')
@@ -868,21 +869,31 @@ JEOF`);
                   <span className="text-xs text-base-content/50">{fmtDate(new Date().toISOString())}</span>
                 </div>
 
-                <div className="flex gap-3 justify-end">
-                  <button className="btn btn-ghost btn-sm" onClick={() => { setCurrentCheck(null); }}>
-                    ← Back
-                  </button>
-                  <button className="btn btn-primary btn-sm"
-                    disabled={!signName.trim()}
-                    onClick={() => setConfirmAction({
-                      text: uncheckedCount > 0
-                        ? `Submit with ${uncheckedCount} discrepanc${uncheckedCount > 1 ? 'ies' : 'y'}? This will be recorded and signed by ${signName.trim()}.`
-                        : `Submit — all items present? Signed by ${signName.trim()}.`,
-                      onYes: submitCheck
-                    })}>
-                    <CheckCircle2 size={16} /> Submit Check
-                  </button>
-                </div>
+                {submitConfirm ? (
+                  <div className="alert alert-warning text-sm">
+                    <AlertTriangle size={18} />
+                    <span>
+                      {uncheckedCount > 0
+                        ? `Submit with ${uncheckedCount} discrepanc${uncheckedCount > 1 ? 'ies' : 'y'}? Signed by ${signName.trim()}.`
+                        : `Submit — all items present? Signed by ${signName.trim()}.`}
+                    </span>
+                    <div className="flex gap-2">
+                      <button className="btn btn-sm btn-warning" onClick={() => { setSubmitConfirm(false); submitCheck(); }}>Yes</button>
+                      <button className="btn btn-sm btn-ghost" onClick={() => setSubmitConfirm(false)}>No</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 justify-end">
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setCurrentCheck(null); }}>
+                      ← Back
+                    </button>
+                    <button className="btn btn-primary btn-sm"
+                      disabled={!signName.trim()}
+                      onClick={() => setSubmitConfirm(true)}>
+                      <CheckCircle2 size={16} /> Submit Check
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
