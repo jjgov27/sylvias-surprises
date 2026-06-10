@@ -244,12 +244,13 @@ export function StockCheck({ currentUser }: Props) {
     const missingItems = checkItems.filter(i => !i.checked);
     const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
+    if (!signName.trim()) {
+      setMsg('Please enter your name to sign off');
+      return;
+    }
+
     if (missingItems.length > 0) {
-      // Has discrepancies — require signature
-      if (!signName.trim()) {
-        setMsg('Please enter your name to sign off on discrepancies');
-        return;
-      }
+      // Has discrepancies
       await window.tasklet.sqlExec(
         `UPDATE sylvias_stock_checks SET
           status = 'completed_discrepancy',
@@ -267,7 +268,9 @@ export function StockCheck({ currentUser }: Props) {
           status = 'completed_ok',
           completed_at = '${now}',
           found_count = ${checkedCount},
-          missing_count = 0
+          missing_count = 0,
+          signed_by = '${esc(signName.trim())}',
+          signed_at = '${now}'
         WHERE id = ${currentCheck.id}`
       );
     }
@@ -767,11 +770,26 @@ JEOF`);
                 )}
               </div>
 
-              {/* Progress */}
+              {/* Progress + Tick All */}
               {!isCompleted && (
                 <div className="flex items-center gap-3 mt-3">
                   <progress className="progress progress-primary flex-1" value={checkedCount} max={checkItems.length}></progress>
                   <span className="text-sm font-mono">{checkedCount}/{checkItems.length} verified</span>
+                  {checkedCount < checkItems.length && (
+                    <button className="btn btn-sm btn-success gap-1" onClick={async () => {
+                      for (const item of checkItems) {
+                        if (!item.checked) {
+                          await window.tasklet.sqlExec(`UPDATE sylvias_stock_check_items SET checked = 1 WHERE id = ${item.id}`);
+                        }
+                      }
+                      if (currentCheck && currentCheck.status === 'pending_check') {
+                        await window.tasklet.sqlExec(`UPDATE sylvias_stock_checks SET status = 'in_progress' WHERE id = ${currentCheck.id}`);
+                      }
+                      await refreshCheckItems();
+                    }}>
+                      <Check size={16} /> Tick All
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -835,12 +853,6 @@ JEOF`);
                       <AlertTriangle size={18} />
                       <span>There are unchecked items. To submit, please sign below to confirm the discrepancies.</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <label className="font-semibold text-sm">Sign (your name):</label>
-                      <input type="text" className="input input-bordered input-sm w-64" value={signName}
-                        onChange={e => setSignName(e.target.value)} placeholder="e.g. Gavin" />
-                      <span className="text-xs text-base-content/50">{fmtDate(new Date().toISOString())}</span>
-                    </div>
                   </>
                 ) : (
                   <div className="text-sm text-success font-semibold">
@@ -848,16 +860,24 @@ JEOF`);
                   </div>
                 )}
 
+                {/* Sign-off — always required */}
+                <div className="flex items-center gap-3">
+                  <label className="font-semibold text-sm">Sign off (your name):</label>
+                  <input type="text" className="input input-bordered input-sm w-64" value={signName}
+                    onChange={e => setSignName(e.target.value)} placeholder="e.g. Gavin" />
+                  <span className="text-xs text-base-content/50">{fmtDate(new Date().toISOString())}</span>
+                </div>
+
                 <div className="flex gap-3 justify-end">
                   <button className="btn btn-ghost btn-sm" onClick={() => { setCurrentCheck(null); }}>
                     ← Back
                   </button>
                   <button className="btn btn-primary btn-sm"
-                    disabled={uncheckedCount > 0 && !signName.trim()}
+                    disabled={!signName.trim()}
                     onClick={() => setConfirmAction({
                       text: uncheckedCount > 0
                         ? `Submit with ${uncheckedCount} discrepanc${uncheckedCount > 1 ? 'ies' : 'y'}? This will be recorded and signed by ${signName.trim()}.`
-                        : 'Submit — all items present?',
+                        : `Submit — all items present? Signed by ${signName.trim()}.`,
                       onYes: submitCheck
                     })}>
                     <CheckCircle2 size={16} /> Submit Check
