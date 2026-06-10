@@ -288,8 +288,20 @@ import json, sys
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Flowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+class TickBox(Flowable):
+    """Empty square box for ticking"""
+    def __init__(self, size=8):
+        Flowable.__init__(self)
+        self.size = size
+        self.width = size
+        self.height = size
+    def draw(self):
+        self.canv.setStrokeColor(colors.HexColor('#666666'))
+        self.canv.setLineWidth(0.8)
+        self.canv.rect(0, 0, self.size, self.size, fill=0)
 
 check = json.loads(sys.argv[1])
 items = json.loads(sys.argv[2])
@@ -319,7 +331,7 @@ story.append(Spacer(1, 4*mm))
 data = [['✓', 'Item Description', 'Part No.', 'Location', 'Qty', 'Notes']]
 for item in items:
     data.append([
-        '☐',
+        TickBox(),
         Paragraph(item['description'][:55], cell_style),
         Paragraph(item['part_number'] or '—', cell_style),
         Paragraph(item['location'] or '—', cell_style),
