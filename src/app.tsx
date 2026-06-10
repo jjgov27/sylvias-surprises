@@ -154,6 +154,7 @@ export default function App() {
   const [editItem, setEditItem] = useState<StockItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastSaleId, setLastSaleId] = useState<number | null>(null);
+  const [saleToast, setSaleToast] = useState<string | null>(null);
 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -225,9 +226,17 @@ export default function App() {
     setView('stock-control');
   }
 
-  function handleSaleComplete(saleId: number, printInvoice: boolean) {
+  function handleSaleComplete(saleId: number, printInvoice: boolean, invoiceNumber?: string) {
     setLastSaleId(saleId);
-    setView('invoice-view');
+    if (printInvoice) {
+      setView('invoice-view');
+    } else {
+      // No receipt — show success toast and stay on sell screen
+      const label = invoiceNumber ? invoiceNumber : `#${saleId}`;
+      setSaleToast(`✅ Sale ${label} recorded — no receipt`);
+      setView('sell');
+      setTimeout(() => setSaleToast(null), 4000);
+    }
   }
 
   function toggleGroup(title: string) {
@@ -683,6 +692,11 @@ export default function App() {
             {ALL_NAV_ITEMS.find(n => n.id === view)?.label || ''}
           </span>
         </div>
+        {saleToast && (
+          <div className="mx-5 mt-3 p-3 bg-success/15 border border-success/30 rounded-lg text-success font-semibold text-center animate-pulse">
+            {saleToast}
+          </div>
+        )}
         {view === 'stock-entry' ? (
           <StockEntry
             currentUser={currentUser}

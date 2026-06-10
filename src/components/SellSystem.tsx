@@ -8,7 +8,7 @@ import { CreditNote, GiftVoucher } from '../types';
 
 interface Props {
   currentUser: StaffUser;
-  onSaleComplete: (saleId: number, printInvoice: boolean) => void;
+  onSaleComplete: (saleId: number, printInvoice: boolean, invoiceNumber?: string) => void;
 }
 
 export function SellSystem({ currentUser, onSaleComplete }: Props) {
@@ -406,7 +406,7 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
         });
       }
 
-      onSaleComplete(saleId, printInvoice);
+      onSaleComplete(saleId, printInvoice, invoiceNum);
     } catch (err) {
       alert('Error completing sale: ' + (err as Error).message);
     } finally {
