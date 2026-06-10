@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StaffUser, StockItem, CartItem, Customer, ConsignmentItem } from '../types';
-import { searchStock, getStockByPartNumber, updateStockQty, createSale, addSaleItem, generateInvoiceNumber, searchCustomers, addCustomer, searchConsignmentStock, recordConsignmentSale, addPayment, addTradeInStockItem, getCreditNoteByNumber, useCreditNote, getCreditNotesByCustomer, getGiftVoucherByNumber, useGiftVoucher, SALUTATIONS, CATEGORIES, titleCase, getCategories } from '../utils/db';
+import { searchStock, searchStockInStock, getStockByPartNumber, updateStockQty, createSale, addSaleItem, generateInvoiceNumber, searchCustomers, addCustomer, searchConsignmentStock, recordConsignmentSale, addPayment, addTradeInStockItem, getCreditNoteByNumber, useCreditNote, getCreditNotesByCustomer, getGiftVoucherByNumber, useGiftVoucher, SALUTATIONS, CATEGORIES, titleCase, getCategories } from '../utils/db';
 import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, Globe, AlertTriangle, CheckCircle, Users, UserPlus, Landmark, ArrowLeftRight, FileText, Tag, Gift, Printer } from 'lucide-react';
 import { PostcodeLookup } from './PostcodeLookup';
 import { CreditNote, GiftVoucher } from '../types';
@@ -9,9 +9,10 @@ import { CreditNote, GiftVoucher } from '../types';
 interface Props {
   currentUser: StaffUser;
   onSaleComplete: (saleId: number, printInvoice: boolean, invoiceNumber?: string) => void;
+  resetKey?: number;
 }
 
-export function SellSystem({ currentUser, onSaleComplete }: Props) {
+export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<StockItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -66,6 +67,22 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
 
   useEffect(() => { getCategories().then(setDynCategories); }, []);
 
+  // Reset all state when resetKey changes (after a sale completes)
+  useEffect(() => {
+    if (resetKey === undefined || resetKey === 0) return;
+    setSearchQuery(''); setSearchResults([]); setCart([]); setSearching(false); setHasSearched(false);
+    setCustomerName('Walk-in'); setSelectedCustomer(null); setCustomerSearch(''); setCustomerResults([]);
+    setShowCustomerPicker(false); setCustomerFieldFocused(false); setShowQuickAdd(false);
+    setQuickAddForm({ salutation: '', first_name: '', surname: '', phone: '', email: '', address_line1: '', address_line2: '', address_line3: '', postcode: '' });
+    setPaymentMethod('cash'); setSaleType('receipt'); setDueDate(''); setPartialAmount('');
+    setShowConfirm(false); setPrintReceipt(true); setProcessing(false);
+    setOverrideItemId(null); setOverrideInitials(''); setSaleNotes(''); setConsignmentResults([]);
+    setCreditNoteEnabled(false); setCreditNoteSearch(''); setAppliedCreditNote(null); setCreditNoteError(''); setCreditNoteAmountToUse(''); setCustomerCreditNotes([]);
+    setGiftVoucherEnabled(false); setGiftVoucherSearch(''); setAppliedGiftVoucher(null); setGiftVoucherError(''); setGiftVoucherAmountToUse('');
+    setTradeInEnabled(false); setTradeInDesc(''); setTradeInCategory('Other'); setTradeInValue(''); setTradeInRrp(''); setTradeInLocation('Back Room'); setTradeInNotes('');
+    setPriceStrings({});
+  }, [resetKey]);
+
   const doSearch = useCallback(async (query?: string) => {
     const q = (query ?? searchQuery).trim();
     if (!q) return;
@@ -79,7 +96,7 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
         setConsignmentResults([]);
       } else {
         const [results, conResults] = await Promise.all([
-          searchStock(q),
+          searchStockInStock(q),
           searchConsignmentStock(q),
         ]);
         setSearchResults(results);
@@ -407,6 +424,7 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
         });
       }
 
+      setShowConfirm(false);
       onSaleComplete(saleId, printInvoice, invoiceNum);
     } catch (err) {
       alert('Error completing sale: ' + (err as Error).message);
@@ -722,28 +740,8 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
               </div>
 
               {/* Sale Type toggle */}
-              <div className="mt-3">
-                <label className="label"><span className="label-text font-semibold">Sale Type</span></label>
-                <div className="flex gap-2">
-                  <button className={`btn btn-sm ${saleType === 'receipt' ? 'btn-primary' : 'btn-outline'} gap-1`}
-                    onClick={() => { setSaleType('receipt'); setPartialAmount(''); setDueDate(''); }}>
-                    🧾 Pay Now (Receipt)
-                  </button>
-                  <button className={`btn btn-sm ${saleType === 'invoice' ? 'btn-warning' : 'btn-outline'} gap-1`}
-                    onClick={() => {
-                      setSaleType('invoice');
-                      // Auto-set due date to 7 days from now
-                      const d = new Date();
-                      d.setDate(d.getDate() + 7);
-                      setDueDate(d.toISOString().split('T')[0]);
-                    }}>
-                    📋 On Account (Invoice)
-                  </button>
-                </div>
-              </div>
-
-              {/* Payment method — shown when there's a balance to pay (not fully covered by trade-in/credit note/gift voucher) */}
-              {effectiveTotal > 0 && (saleType === 'receipt' || (saleType === 'invoice' && partialAmount && parseFloat(partialAmount) > 0)) && (
+              {/* Payment method — shown for Pay Now sales when there's a balance to pay */}
+              {effectiveTotal > 0 && saleType !== 'invoice' && (
                 <div className="mt-3">
                   <label className="label"><span className="label-text font-semibold">Payment Method</span></label>
                   <div className="flex gap-2 flex-wrap">
@@ -767,10 +765,71 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
                 </div>
               )}
 
-              {/* Account sale options */}
+              {/* Three clear sale action buttons */}
+              <div className="mt-4 flex gap-2 flex-wrap">
+                <button
+                  className="btn btn-success btn-lg gap-2 flex-1"
+                  onClick={() => {
+                    if (tradeInEnabled && !tradeInDesc.trim()) {
+                      alert('Please enter a description for the trade-in item');
+                      return;
+                    }
+                    if (tradeInEnabled && tradeInAmount <= 0) {
+                      alert('Please enter a trade-in allowance value');
+                      return;
+                    }
+                    setSaleType('receipt');
+                    setPrintReceipt(true);
+                    setShowConfirm(true);
+                  }}
+                  disabled={processing}
+                >
+                  <CheckCircle size={20} /> Pay Now + Receipt — £{(tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) && (tradeInAmount + creditNoteAmount + giftVoucherAmount) > 0 ? effectiveTotal.toFixed(2) + ' to pay' : cartTotal.toFixed(2)}
+                </button>
+                <button
+                  className="btn btn-outline btn-warning btn-lg gap-2 flex-1"
+                  onClick={() => {
+                    if (tradeInEnabled && !tradeInDesc.trim()) {
+                      alert('Please enter a description for the trade-in item');
+                      return;
+                    }
+                    if (tradeInEnabled && tradeInAmount <= 0) {
+                      alert('Please enter a trade-in allowance value');
+                      return;
+                    }
+                    setSaleType('receipt');
+                    setPrintReceipt(false);
+                    setShowConfirm(true);
+                  }}
+                  disabled={processing}
+                >
+                  <CheckCircle size={20} /> Pay Now — No Receipt
+                </button>
+                <button
+                  className={`btn btn-lg gap-2 flex-1 ${saleType === 'invoice' ? 'btn-info' : 'btn-outline btn-info'}`}
+                  onClick={() => {
+                    if (saleType === 'invoice') {
+                      // Toggle off
+                      setSaleType('receipt');
+                      setPartialAmount('');
+                      setDueDate('');
+                    } else {
+                      setSaleType('invoice');
+                      const d = new Date();
+                      d.setDate(d.getDate() + 7);
+                      setDueDate(d.toISOString().split('T')[0]);
+                    }
+                  }}
+                  disabled={processing}
+                >
+                  📋 Invoice
+                </button>
+              </div>
+
+              {/* Invoice details — shown when Invoice button is selected */}
               {saleType === 'invoice' && (
-                <div className="mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg space-y-3">
-                  <div className="flex items-center gap-2 text-warning font-semibold text-sm">📋 Account Sale Details</div>
+                <div className="mt-3 p-3 bg-info/10 border border-info/30 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2 text-info font-semibold text-sm">📋 Account Sale Details</div>
                   <div className="form-control">
                     <label className="label py-1"><span className="label-text text-sm">Due Date</span></label>
                     <input type="date" className="input input-bordered input-sm w-48" value={dueDate}
@@ -785,11 +844,72 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
                       <span className="text-sm text-base-content/50">of £{cartTotal.toFixed(2)}</span>
                     </div>
                   </div>
+                  {/* Payment method for deposit */}
+                  {partialAmount && parseFloat(partialAmount) > 0 && (
+                    <div>
+                      <label className="label py-1"><span className="label-text text-sm">Deposit Payment Method</span></label>
+                      <div className="flex gap-2 flex-wrap">
+                        <button className={`btn btn-sm ${paymentMethod === 'cash' ? 'btn-success' : 'btn-outline'} gap-1`}
+                          onClick={() => setPaymentMethod('cash')}>
+                          <Banknote size={14} /> Cash
+                        </button>
+                        <button className={`btn btn-sm ${paymentMethod === 'sumup' ? 'btn-info' : 'btn-outline'} gap-1`}
+                          onClick={() => setPaymentMethod('sumup')}>
+                          <CreditCard size={14} /> SumUp
+                        </button>
+                        <button className={`btn btn-sm ${paymentMethod === 'bank_transfer' ? 'btn-secondary' : 'btn-outline'} gap-1`}
+                          onClick={() => setPaymentMethod('bank_transfer')}>
+                          <Landmark size={14} /> Bank Transfer
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      className="btn btn-info gap-2 flex-1"
+                      onClick={() => {
+                        if (tradeInEnabled && !tradeInDesc.trim()) {
+                          alert('Please enter a description for the trade-in item');
+                          return;
+                        }
+                        if (tradeInEnabled && tradeInAmount <= 0) {
+                          alert('Please enter a trade-in allowance value');
+                          return;
+                        }
+                        setPrintReceipt(true);
+                        setShowConfirm(true);
+                      }}
+                      disabled={processing}
+                    >
+                      <CheckCircle size={18} /> Create Invoice + Print
+                    </button>
+                    <button
+                      className="btn btn-outline btn-info gap-2 flex-1"
+                      onClick={() => {
+                        if (tradeInEnabled && !tradeInDesc.trim()) {
+                          alert('Please enter a description for the trade-in item');
+                          return;
+                        }
+                        if (tradeInEnabled && tradeInAmount <= 0) {
+                          alert('Please enter a trade-in allowance value');
+                          return;
+                        }
+                        setPrintReceipt(false);
+                        setShowConfirm(true);
+                      }}
+                      disabled={processing}
+                    >
+                      <CheckCircle size={18} /> Create Invoice — No Print
+                    </button>
+                  </div>
                 </div>
               )}
 
+              {/* Optional extras - collapsible section */}
+              <div className="divider text-xs text-base-content/40 mt-4 mb-1">Optional Extras</div>
+
               {/* Trade-In */}
-              <div className="mt-3">
+              <div className="mt-1">
                 <label className="label cursor-pointer justify-start gap-2">
                   <input type="checkbox" className="toggle toggle-accent" checked={tradeInEnabled}
                     onChange={e => {
@@ -1092,45 +1212,6 @@ export function SellSystem({ currentUser, onSaleComplete }: Props) {
                 />
               </div>
 
-              {/* Complete sale buttons */}
-              <div className="mt-4 flex gap-2 flex-wrap">
-                <button
-                  className="btn btn-success btn-lg gap-2 flex-1"
-                  onClick={() => {
-                    if (tradeInEnabled && !tradeInDesc.trim()) {
-                      alert('Please enter a description for the trade-in item');
-                      return;
-                    }
-                    if (tradeInEnabled && tradeInAmount <= 0) {
-                      alert('Please enter a trade-in allowance value');
-                      return;
-                    }
-                    setPrintReceipt(true);
-                    setShowConfirm(true);
-                  }}
-                  disabled={processing}
-                >
-                  <CheckCircle size={20} /> {saleType === 'invoice' ? 'Create Invoice + Print' : 'Sale + Receipt'} — £{(tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) && (tradeInAmount + creditNoteAmount + giftVoucherAmount) > 0 ? effectiveTotal.toFixed(2) + ' to pay' : cartTotal.toFixed(2)}
-                </button>
-                <button
-                  className="btn btn-outline btn-warning btn-lg gap-2 flex-1"
-                  onClick={() => {
-                    if (tradeInEnabled && !tradeInDesc.trim()) {
-                      alert('Please enter a description for the trade-in item');
-                      return;
-                    }
-                    if (tradeInEnabled && tradeInAmount <= 0) {
-                      alert('Please enter a trade-in allowance value');
-                      return;
-                    }
-                    setPrintReceipt(false);
-                    setShowConfirm(true);
-                  }}
-                  disabled={processing}
-                >
-                  <CheckCircle size={20} /> {saleType === 'invoice' ? 'Create Invoice — No Print' : 'Sale — No Receipt'}
-                </button>
-              </div>
             </>
           )}
         </div>

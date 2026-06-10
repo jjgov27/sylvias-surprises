@@ -39,11 +39,12 @@ import { GiftVouchers } from './components/GiftVouchers';
 import { QuickStockEntry } from './components/QuickStockEntry';
 import { ScanReview } from './components/ScanReview';
 import { EbayExport } from './components/EbayExport';
+import { StockCheck } from './components/StockCheck';
 import {
   Package, PlusCircle, LogOut, Store, ShoppingCart, Receipt, Users, BookOpen, Wallet,
   BarChart3, Banknote, Handshake, Bookmark, Heart, Truck, Tag, TrendingUp, ChevronDown,
   ChevronRight, Star, Menu, X, Coins, Settings, Clock, RotateCcw, FileText, Building2, Calculator, ShoppingBag, DollarSign,
-  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine,
+  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical,
 } from 'lucide-react';
 import { getSetting, setSetting } from './utils/db';
 
@@ -69,6 +70,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'scan-review', label: 'Scan Review', icon: <ScanLine size={18} /> },
       { id: 'purchase-stock', label: 'Purchase Stock', icon: <ShoppingBag size={18} /> },
       { id: 'price-labels', label: 'Price Labels', icon: <Tag size={18} /> },
+      { id: 'stock-check', label: 'Stock Check', icon: <ClipboardCheck size={18} /> },
     ],
   },
   {
@@ -157,6 +159,13 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [lastSaleId, setLastSaleId] = useState<number | null>(null);
   const [saleToast, setSaleToast] = useState<string | null>(null);
+  const [sellResetKey, setSellResetKey] = useState(0);
+
+  // Dashboard drag state
+  const [dashTileOrder, setDashTileOrder] = useState<string[] | null>(null);
+  const [dragTile, setDragTile] = useState<string | null>(null);
+  const [dragOverTile, setDragOverTile] = useState<string | null>(null);
+  const [dashEditMode, setDashEditMode] = useState(false);
 
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -182,6 +191,8 @@ export default function App() {
       setSidebarOrder(order);
       const zoom = await getSetting('ui_zoom');
       if (zoom) setUiZoom(parseFloat(zoom));
+      const tileOrder = await getSetting('dashboard_tile_order');
+      if (tileOrder) { try { setDashTileOrder(JSON.parse(tileOrder)); } catch {} }
       setLoading(false);
     });
   }, []);
@@ -224,6 +235,7 @@ export default function App() {
       // No receipt — show success toast and stay on sell screen
       const label = invoiceNumber ? invoiceNumber : `#${saleId}`;
       setSaleToast(`✅ Sale ${label} recorded — no receipt`);
+      setSellResetKey(k => k + 1);
       setView('sell');
       setTimeout(() => setSaleToast(null), 4000);
     }
@@ -292,6 +304,38 @@ export default function App() {
     setView(id);
   }
 
+  /* ── Dashboard tile definitions (must be before any early returns for hook rules) ── */
+  const DASH_TILES = [
+    { id: 'stock-control' as ViewMode, label: 'Stock Control', desc: 'View & manage inventory', icon: <Package size={36} />, color: 'from-blue-500 to-blue-700' },
+    { id: 'stock-entry' as ViewMode, label: 'Add New Item', desc: 'Enter new stock', icon: <PlusCircle size={36} />, color: 'from-emerald-500 to-emerald-700' },
+    { id: 'quick-stock-entry' as ViewMode, label: 'Quick Entry', desc: 'Bulk spreadsheet entry', icon: <Zap size={36} />, color: 'from-teal-500 to-teal-700' },
+    { id: 'scan-review' as ViewMode, label: 'Scan Review', desc: 'Check scanned items', icon: <ScanLine size={36} />, color: 'from-orange-500 to-orange-600' },
+    { id: 'sell' as ViewMode, label: 'Sell', desc: 'Point of sale', icon: <ShoppingCart size={36} />, color: 'from-amber-500 to-amber-700' },
+    { id: 'cashup' as ViewMode, label: 'End of Day', desc: 'Cash-up & close', icon: <Calculator size={36} />, color: 'from-purple-500 to-purple-700' },
+    { id: 'bullion' as ViewMode, label: 'Bullion', desc: 'Gold & silver tracker', icon: <Coins size={36} />, color: 'from-yellow-500 to-yellow-700' },
+    { id: 'sales-ledger' as ViewMode, label: 'Sales Ledger', desc: 'All transactions', icon: <BookOpen size={36} />, color: 'from-rose-500 to-rose-700' },
+    { id: 'customers' as ViewMode, label: 'Customers', desc: 'Customer database', icon: <Users size={36} />, color: 'from-cyan-500 to-cyan-700' },
+    { id: 'expenses' as ViewMode, label: 'Expenses', desc: 'Track costs', icon: <Wallet size={36} />, color: 'from-orange-500 to-orange-700' },
+    { id: 'consignment' as ViewMode, label: 'Consignment', desc: 'Consigned items', icon: <Handshake size={36} />, color: 'from-teal-500 to-teal-700' },
+    { id: 'profit-dashboard' as ViewMode, label: 'Profit Dashboard', desc: 'Performance overview', icon: <TrendingUp size={36} />, color: 'from-indigo-500 to-indigo-700' },
+    { id: 'gift-vouchers' as ViewMode, label: 'Gift Vouchers', desc: 'Issue & manage', icon: <Gift size={36} />, color: 'from-pink-500 to-pink-700' },
+    { id: 'stock-check' as ViewMode, label: 'Stock Check', desc: 'Verify inventory', icon: <ClipboardCheck size={36} />, color: 'from-lime-500 to-lime-700' },
+    { id: 'ebay-export' as ViewMode, label: 'eBay Export', desc: 'List items on eBay', icon: <ShoppingBag size={36} />, color: 'from-blue-500 to-blue-700' },
+    { id: 'admin' as ViewMode, label: 'Settings', desc: 'Admin & config', icon: <Settings size={36} />, color: 'from-slate-500 to-slate-700' },
+  ];
+
+  const orderedTiles = React.useMemo(() => {
+    if (!dashTileOrder) return DASH_TILES;
+    const tileMap = new Map(DASH_TILES.map(t => [t.id, t]));
+    const ordered: typeof DASH_TILES = [];
+    for (const id of dashTileOrder) {
+      const t = tileMap.get(id as ViewMode);
+      if (t) { ordered.push(t); tileMap.delete(id as ViewMode); }
+    }
+    for (const t of tileMap.values()) ordered.push(t);
+    return ordered;
+  }, [dashTileOrder]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-base-100 flex items-center justify-center">
@@ -328,23 +372,27 @@ export default function App() {
   }
 
   /* ── Post-login Dashboard ── */
-  const DASH_TILES = [
-    { id: 'stock-control' as ViewMode, label: 'Stock Control', desc: 'View & manage inventory', icon: <Package size={36} />, color: 'from-blue-500 to-blue-700' },
-    { id: 'stock-entry' as ViewMode, label: 'Add New Item', desc: 'Enter new stock', icon: <PlusCircle size={36} />, color: 'from-emerald-500 to-emerald-700' },
-    { id: 'quick-stock-entry' as ViewMode, label: 'Quick Entry', desc: 'Bulk spreadsheet entry', icon: <Zap size={36} />, color: 'from-teal-500 to-teal-700' },
-    { id: 'scan-review' as ViewMode, label: 'Scan Review', desc: 'Check scanned items', icon: <ScanLine size={36} />, color: 'from-orange-500 to-orange-600' },
-    { id: 'sell' as ViewMode, label: 'Sell', desc: 'Point of sale', icon: <ShoppingCart size={36} />, color: 'from-amber-500 to-amber-700' },
-    { id: 'cashup' as ViewMode, label: 'End of Day', desc: 'Cash-up & close', icon: <Calculator size={36} />, color: 'from-purple-500 to-purple-700' },
-    { id: 'bullion' as ViewMode, label: 'Bullion', desc: 'Gold & silver tracker', icon: <Coins size={36} />, color: 'from-yellow-500 to-yellow-700' },
-    { id: 'sales-ledger' as ViewMode, label: 'Sales Ledger', desc: 'All transactions', icon: <BookOpen size={36} />, color: 'from-rose-500 to-rose-700' },
-    { id: 'customers' as ViewMode, label: 'Customers', desc: 'Customer database', icon: <Users size={36} />, color: 'from-cyan-500 to-cyan-700' },
-    { id: 'expenses' as ViewMode, label: 'Expenses', desc: 'Track costs', icon: <Wallet size={36} />, color: 'from-orange-500 to-orange-700' },
-    { id: 'consignment' as ViewMode, label: 'Consignment', desc: 'Consigned items', icon: <Handshake size={36} />, color: 'from-teal-500 to-teal-700' },
-    { id: 'profit-dashboard' as ViewMode, label: 'Profit Dashboard', desc: 'Performance overview', icon: <TrendingUp size={36} />, color: 'from-indigo-500 to-indigo-700' },
-    { id: 'gift-vouchers' as ViewMode, label: 'Gift Vouchers', desc: 'Issue & manage', icon: <Gift size={36} />, color: 'from-pink-500 to-pink-700' },
-    { id: 'ebay-export' as ViewMode, label: 'eBay Export', desc: 'List items on eBay', icon: <ShoppingBag size={36} />, color: 'from-blue-500 to-blue-700' },
-    { id: 'admin' as ViewMode, label: 'Settings', desc: 'Admin & config', icon: <Settings size={36} />, color: 'from-slate-500 to-slate-700' },
-  ];
+  function handleDashDragStart(id: string) {
+    setDragTile(id);
+  }
+  function handleDashDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    setDragOverTile(id);
+  }
+  function handleDashDrop(targetId: string) {
+    if (!dragTile || dragTile === targetId) { setDragTile(null); setDragOverTile(null); return; }
+    const currentOrder = orderedTiles.map(t => t.id);
+    const fromIdx = currentOrder.indexOf(dragTile as ViewMode);
+    const toIdx = currentOrder.indexOf(targetId as ViewMode);
+    if (fromIdx === -1 || toIdx === -1) { setDragTile(null); setDragOverTile(null); return; }
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, dragTile as ViewMode);
+    setDashTileOrder(newOrder);
+    setSetting('dashboard_tile_order', JSON.stringify(newOrder));
+    setDragTile(null);
+    setDragOverTile(null);
+  }
 
   if (view === 'dashboard') {
     return (
@@ -362,17 +410,40 @@ export default function App() {
           </p>
         </div>
 
+        {/* Edit mode toggle */}
+        <div className="max-w-4xl mx-auto px-4 mb-2 flex justify-end">
+          <button
+            className={`btn btn-sm gap-1 ${dashEditMode ? 'btn-warning' : 'btn-ghost'}`}
+            onClick={() => setDashEditMode(!dashEditMode)}
+          >
+            <GripVertical size={14} /> {dashEditMode ? '✓ Done Arranging' : 'Arrange Tiles'}
+          </button>
+        </div>
+
         {/* Tile grid */}
         <div className="max-w-4xl mx-auto px-4 pb-10">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {DASH_TILES.map(tile => (
+            {orderedTiles.map(tile => (
               <button
                 key={tile.id}
-                onClick={() => { if (tile.id === 'stock-entry') setEditItem(null); setView(tile.id); }}
+                draggable={dashEditMode}
+                onDragStart={() => handleDashDragStart(tile.id)}
+                onDragOver={(e) => handleDashDragOver(e, tile.id)}
+                onDragEnd={() => { setDragTile(null); setDragOverTile(null); }}
+                onDrop={() => handleDashDrop(tile.id)}
+                onClick={() => { if (!dashEditMode) { if (tile.id === 'stock-entry') setEditItem(null); setView(tile.id); } }}
                 className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${tile.color} text-white shadow-lg
-                  hover:shadow-2xl hover:scale-[1.03] active:scale-[0.98] transition-all duration-200 ease-out
-                  flex flex-col items-center justify-center text-center p-6 min-h-[140px]`}
+                  ${dashEditMode ? 'cursor-grab active:cursor-grabbing' : 'hover:shadow-2xl hover:scale-[1.03] active:scale-[0.98]'}
+                  transition-all duration-200 ease-out
+                  flex flex-col items-center justify-center text-center p-6 min-h-[140px]
+                  ${dragOverTile === tile.id && dragTile !== tile.id ? 'ring-4 ring-white/60 scale-[1.05]' : ''}
+                  ${dragTile === tile.id ? 'opacity-40' : ''}`}
               >
+                {dashEditMode && (
+                  <div className="absolute top-2 right-2 z-20">
+                    <GripVertical size={18} className="text-white/60" />
+                  </div>
+                )}
                 {/* Subtle glow */}
                 <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-200 rounded-2xl" />
                 <div className="relative z-10 flex flex-col items-center gap-2">
@@ -712,11 +783,12 @@ export default function App() {
           <SellSystem
             currentUser={currentUser}
             onSaleComplete={handleSaleComplete}
+            resetKey={sellResetKey}
           />
         ) : view === 'invoice-view' && lastSaleId ? (
           <InvoiceView
             saleId={lastSaleId}
-            onBack={() => setView('sell')}
+            onBack={() => { setSellResetKey(k => k + 1); setView('sell'); }}
           />
         ) : view === 'sales-ledger' ? (
           <SalesLedger currentUser={currentUser} onViewInvoice={(id) => { setLastSaleId(id); setView('invoice-view'); }} />
@@ -768,6 +840,8 @@ export default function App() {
           <InsuranceRegister currentUser={currentUser} />
         ) : view === 'gift-vouchers' ? (
           <GiftVouchers currentUser={currentUser} />
+        ) : view === 'stock-check' ? (
+          <StockCheck currentUser={currentUser} />
         ) : view === 'ebay-export' ? (
           <EbayExport currentUser={currentUser} />
         ) : (
