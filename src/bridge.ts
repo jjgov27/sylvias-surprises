@@ -18,11 +18,25 @@ async function apiFetch(url: string, body: any): Promise<any> {
 const bridge = {
   // SQL operations — used by db.ts (162 query + 99 exec calls)
   async sqlQuery(sql: string): Promise<any[]> {
-    return apiFetch('/api/sql/query', { sql });
+    try {
+      return await apiFetch('/api/sql/query', { sql });
+    } catch (e: any) {
+      if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
+        return [];
+      }
+      throw e;
+    }
   },
 
   async sqlExec(sql: string): Promise<{ rowsAffected: number; lastInsertRowid?: number }> {
-    return apiFetch('/api/sql/exec', { sql });
+    try {
+      return await apiFetch('/api/sql/exec', { sql });
+    } catch (e: any) {
+      if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
+        return { rowsAffected: 0 };
+      }
+      throw e;
+    }
   },
 
   // Batch SQL — for init with multiple CREATE TABLE statements
