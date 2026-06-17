@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { runSql } from '../utils/db';
+// Use window.tasklet.sqlQuery for SELECTs, sqlExec for writes
+const sqlQuery = (sql: string) => (window as any).tasklet.sqlQuery(sql);
+const sqlExec = (sql: string) => (window as any).tasklet.sqlExec(sql);
 
 interface BulkRow {
   id: number;
@@ -46,14 +48,14 @@ export default function BulkStockEntry({ staffName, staffInitials, onBack }: Pro
   useEffect(() => {
     (async () => {
       try {
-        const catRows = await runSql("SELECT value FROM sylvias_settings WHERE key='custom_categories'");
+        const catRows = await sqlQuery("SELECT value FROM sylvias_settings WHERE key='custom_categories'");
         if (catRows.length > 0 && catRows[0].value) {
           const arr = JSON.parse(catRows[0].value);
           if (Array.isArray(arr) && arr.length > 0) setCategories(arr);
         }
       } catch {}
       try {
-        const locRows = await runSql("SELECT value FROM sylvias_settings WHERE key='custom_locations'");
+        const locRows = await sqlQuery("SELECT value FROM sylvias_settings WHERE key='custom_locations'");
         if (locRows.length > 0 && locRows[0].value) {
           const arr = JSON.parse(locRows[0].value);
           if (Array.isArray(arr) && arr.length > 0) setLocations(arr);
@@ -128,7 +130,7 @@ export default function BulkStockEntry({ staffName, staffInitials, onBack }: Pro
       const sql = `INSERT INTO sylvias_stock (part_number, description, qty, location, cost, rrp, entered_by, category, no_partnumber_initials, entry_type) VALUES ('${pn}', '${desc}', ${qty}, '${loc}', ${cost}, ${rrp}, '${staffInitials}', '${cat}', '${initials}', 'legacy')`;
 
       try {
-        await runSql(sql);
+        await sqlExec(sql);
         ok++;
       } catch (e: any) {
         saveErrors.push(`"${r.description.trim().slice(0, 30)}": ${e.message || 'Unknown error'}`);
