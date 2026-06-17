@@ -367,7 +367,7 @@ app.get('/api/admin/db-backup', requireAuth, (req, res) => {
 
 app.post('/api/admin/db-restore', requireAuth, (req, res) => {
   // Only allow on test site
-  if (TEST_MODE !== 'true') {
+  if (!TEST_MODE) {
     return res.status(403).json({ error: 'DB restore only allowed in test mode' });
   }
   const chunks = [];
