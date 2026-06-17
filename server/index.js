@@ -357,6 +357,55 @@ if (fs.existsSync(distPath)) {
   });
 }
 
+// ── DB Backup/Restore (admin only) ──
+app.get('/api/admin/db-backup', requireAuth, (req, res) => {
+  try {
+    const backupPath = '/tmp/sylvias-backup.db';
+    db.backup(backupPath).then(() => {
+      res.download(backupPath, 'sylvias.db', (err) => {
+        try { require('fs').unlinkSync(backupPath); } catch(e) {}
+      });
+    }).catch(err => {
+      console.error('Backup failed:', err);
+      res.status(500).json({ error: 'Backup failed' });
+    });
+  } catch(err) {
+    console.error('Backup error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/db-restore', requireAuth, (req, res) => {
+  // Only allow on test site
+  if (TEST_MODE !== 'true') {
+    return res.status(403).json({ error: 'DB restore only allowed in test mode' });
+  }
+  const chunks = [];
+  req.on('data', chunk => chunks.push(chunk));
+  req.on('end', () => {
+    try {
+      const buffer = Buffer.concat(chunks);
+      const restorePath = '/tmp/sylvias-restore.db';
+      require('fs').writeFileSync(restorePath, buffer);
+      // Verify it's a valid SQLite DB
+      const testDb = new Database(restorePath);
+      testDb.pragma('integrity_check');
+      testDb.close();
+      // Close current DB, replace, reopen
+      db.close();
+      require('fs').copyFileSync(restorePath, DB_PATH);
+      require('fs').unlinkSync(restorePath);
+      // Reopen - but since db is const, restart is cleaner
+      res.json({ ok: true, message: 'Database restored. Server will restart.' });
+      // Force restart so the new DB is loaded
+      setTimeout(() => process.exit(0), 500);
+    } catch(err) {
+      console.error('Restore error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+});
+
 app.listen(PORT, () => {
   console.log('Sylvias Surprises running on port ' + PORT);
   console.log('Test mode: ' + TEST_MODE);
