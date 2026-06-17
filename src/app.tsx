@@ -41,11 +41,12 @@ import { QuickStockEntry } from './components/QuickStockEntry';
 import { ScanReview } from './components/ScanReview';
 import { EbayExport } from './components/EbayExport';
 import { StockCheck } from './components/StockCheck';
+import BulkStockEntry from './components/BulkStockEntry';
 import {
   Package, PlusCircle, LogOut, Store, ShoppingCart, Receipt, Users, BookOpen, Wallet,
   BarChart3, Banknote, Handshake, Bookmark, Heart, Truck, Tag, TrendingUp, ChevronDown,
   ChevronRight, Star, Menu, X, Coins, Settings, Clock, RotateCcw, FileText, Building2, Calculator, ShoppingBag, DollarSign,
-  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical,
+  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical, Layers,
 } from 'lucide-react';
 import { getSetting, setSetting } from './utils/db';
 
@@ -72,6 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'purchase-stock', label: 'Purchase Stock', icon: <ShoppingBag size={18} /> },
       { id: 'price-labels', label: 'Price Labels', icon: <Tag size={18} /> },
       { id: 'stock-check', label: 'Stock Check', icon: <ClipboardCheck size={18} /> },
+      { id: 'bulk-stock-entry', label: 'Bulk Entry', icon: <Layers size={18} /> },
     ],
   },
   {
@@ -325,6 +327,7 @@ export default function App() {
     { id: 'gift-vouchers' as ViewMode, label: 'Gift Vouchers', desc: 'Issue & manage', icon: <Gift size={36} />, color: 'from-pink-500 to-pink-700' },
     { id: 'stock-check' as ViewMode, label: 'Stock Check', desc: 'Verify inventory', icon: <ClipboardCheck size={36} />, color: 'from-lime-500 to-lime-700' },
     { id: 'ebay-export' as ViewMode, label: 'eBay Export', desc: 'List items on eBay', icon: <ShoppingBag size={36} />, color: 'from-blue-500 to-blue-700' },
+    { id: 'bulk-stock-entry' as ViewMode, label: 'Bulk Entry', desc: 'Spreadsheet-style stock entry', icon: <Layers size={36} />, color: 'from-violet-500 to-violet-700' },
     { id: 'admin' as ViewMode, label: 'Settings', desc: 'Admin & config', icon: <Settings size={36} />, color: 'from-slate-500 to-slate-700' },
   ];
 
@@ -771,6 +774,8 @@ export default function App() {
             onCancel={() => { setEditItem(null); setView('stock-control'); }}
             onNavigate={(v) => setView(v as ViewMode)}
           />
+        ) : view === 'bulk-stock-entry' ? (
+          <BulkStockEntry staffName={currentUser.name} staffInitials={currentUser.initials} onBack={() => setView('dashboard')} />
         ) : view === 'quick-stock-entry' ? (
           <QuickStockEntry currentUser={currentUser} onNavigate={(v) => setView(v as ViewMode)} />
         ) : view === 'scan-review' ? (
