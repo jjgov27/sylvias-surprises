@@ -388,7 +388,7 @@ app.post('/api/admin/db-restore', requireAuth, (req, res) => {
       // Reopen - but since db is const, restart is cleaner
       res.json({ ok: true, message: 'Database restored. Server will restart.' });
       // Force restart so the new DB is loaded
-      setTimeout(() => process.exit(0), 500);
+      setTimeout(() => process.exit(1), 500);
     } catch(err) {
       console.error('Restore error:', err);
       res.status(500).json({ error: err.message });
