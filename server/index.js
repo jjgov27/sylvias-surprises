@@ -339,9 +339,8 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
   res.json({ url: '/uploads/' + req.file.filename });
 });
 
-// Test mode reset
+// Data reset (admin, behind login + confirmation)
 app.post('/api/admin/reset', requireAuth, (req, res) => {
-  if (!TEST_MODE) return res.status(403).json({ error: 'Not available' });
   const tables = ['sylvias_stock','sylvias_sales','sylvias_sale_items','sylvias_customers','sylvias_expenses','sylvias_payments','sylvias_refunds','sylvias_credit_notes','sylvias_gift_vouchers','sylvias_consignment_items','sylvias_consignees','sylvias_reservations','sylvias_wishlist','sylvias_bullion','sylvias_bank_transactions','sylvias_eod_cashup','sylvias_scan_staging','sylvias_supplier_invoices','sylvias_supplier_invoice_payments','sylvias_suppliers','sylvias_float','sylvias_learned_items'];
   for (const t of tables) { try { db.exec('DELETE FROM ' + t); } catch(e) {} }
   res.json({ ok: true, tablesCleared: tables.length });

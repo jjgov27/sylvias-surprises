@@ -232,7 +232,7 @@ export function Admin({ currentUser }: Props) {
           { id: 'maintenance' as Tab, label: '🔧 Maintenance' },
           { id: 'duplicates' as Tab, label: '🔍 Duplicate Checker' },
           { id: 'email' as Tab, label: '📧 Email Settings' },
-          { id: 'reset' as Tab, label: '🧹 Test Data Reset' },
+          { id: 'reset' as Tab, label: '🧹 Data Reset' },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{
@@ -801,7 +801,7 @@ export function Admin({ currentUser }: Props) {
         <EmailSettings currentUser={currentUser} />
       )}
 
-      {/* ── Test Data Reset Tab ── */}
+      {/* ── Data Reset Tab ── */}
       {tab === 'reset' && (
         <div>
           <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 10, padding: 16, marginBottom: 20 }}>
