@@ -96,6 +96,7 @@ for (const sql of ALTER_SQLS) {
 console.log('Database initialized with all tables');
 
 
+app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.text({ limit: '50mb' }));
@@ -103,7 +104,12 @@ app.use(session({
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, maxAge: 24*60*60*1000 }
+  cookie: {
+    httpOnly: true,
+    maxAge: 24*60*60*1000,
+    secure: true,
+    sameSite: 'lax'
+  }
 }));
 
 app.use('/uploads', express.static(UPLOADS_DIR));
