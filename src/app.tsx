@@ -1,3 +1,4 @@
+/* Sylvia's Surprises – v2.1 */
 import React, { useState, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ViewMode, StockItem, StaffUser } from './types';
@@ -194,6 +195,9 @@ export default function App() {
       const tileOrder = await getSetting('dashboard_tile_order');
       if (tileOrder) { try { setDashTileOrder(JSON.parse(tileOrder)); } catch {} }
       setLoading(false);
+    }).catch((e) => {
+      console.error('initDB failed:', e);
+      setLoading(false); // still show app so user isn't stuck on blank screen
     });
   }, []);
 
@@ -203,16 +207,11 @@ export default function App() {
   }
 
   function handleLogin(user: StaffUser) {
-    // Clear any session-expired banner from bridge
-    const banner = document.getElementById('session-expired-banner');
-    if (banner) banner.remove();
     setCurrentUser(user);
     setView('dashboard');
   }
 
   function handleLogout() {
-    // Destroy server-side session
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     setCurrentUser(null);
     setView('storefront');
   }

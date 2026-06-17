@@ -34,7 +34,6 @@ export interface StockItem {
   purchase_date: string;
   purchase_payment_method: string;
   purchased_by: string;
-  no_partnumber_initials?: string;
 }
 
 export interface StaffUser {

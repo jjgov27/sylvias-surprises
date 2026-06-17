@@ -351,6 +351,22 @@ const INIT_TABLES = [
     status TEXT NOT NULL DEFAULT 'pending',
     scanned_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  `CREATE TABLE IF NOT EXISTS sylvias_email_recipients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `CREATE TABLE IF NOT EXISTS sylvias_sent_emails (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+    subject TEXT NOT NULL DEFAULT '',
+    recipients TEXT NOT NULL DEFAULT '',
+    body_preview TEXT NOT NULL DEFAULT '',
+    sections_used TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'sent'
+  )`,
 ];
 
 const ALTER_SQLS = [
@@ -389,45 +405,25 @@ let initialized = false;
 
 export async function initDB(): Promise<void> {
   if (initialized) return;
-  // Quick check: if the latest table exists, all prior migrations have run
-  let tablesExist = false;
-  try {
-    const check = await window.tasklet.sqlQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='sylvias_supplier_invoices'"
-    );
-    if (check.length > 0) tablesExist = true;
-  } catch (e: any) {
-    // If 401/auth error, tables are created server-side — just skip client init
-    if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
-      initialized = true;
-      return;
-    }
-    /* table doesn't exist yet, run full init */
+
+  // Always run CREATE TABLE IF NOT EXISTS — they are idempotent and ensure
+  // any newly-added tables get created even if older tables already exist.
+  for (let i = 0; i < INIT_TABLES.length; i += 5) {
+    await Promise.all(INIT_TABLES.slice(i, i + 5).map(sql =>
+      window.tasklet.sqlExec(sql).catch((e: unknown) => console.warn('Table init:', e))
+    ));
   }
 
-  if (!tablesExist) {
-    // Run CREATE TABLE statements in batches of 5 to reduce bridge calls
-    for (let i = 0; i < INIT_TABLES.length; i += 5) {
-      await Promise.all(INIT_TABLES.slice(i, i + 5).map(sql => window.tasklet.sqlExec(sql)));
-    }
-    // Run ALTER TABLE statements only on first-time setup
+  // Run ALTER TABLE migrations — skip if latest migration column already exists
+  let needsAlters = false;
+  try {
+    await window.tasklet.sqlQuery("SELECT purchase_payment_method FROM sylvias_bullion LIMIT 1");
+  } catch { needsAlters = true; }
+  if (needsAlters) {
     for (let i = 0; i < ALTER_SQLS.length; i += 5) {
-      await Promise.all(ALTER_SQLS.slice(i, i + 5).map(sql => 
+      await Promise.all(ALTER_SQLS.slice(i, i + 5).map(sql =>
         window.tasklet.sqlExec(sql).catch(() => { /* column already exists */ })
       ));
-    }
-  } else {
-    // Tables exist — only run ALTERs if latest migration column is missing
-    let needsAlters = false;
-    try {
-      await window.tasklet.sqlQuery("SELECT purchase_payment_method FROM sylvias_bullion LIMIT 1");
-    } catch { needsAlters = true; }
-    if (needsAlters) {
-      for (let i = 0; i < ALTER_SQLS.length; i += 5) {
-        await Promise.all(ALTER_SQLS.slice(i, i + 5).map(sql => 
-          window.tasklet.sqlExec(sql).catch(() => { /* column already exists */ })
-        ));
-      }
     }
   }
   initialized = true;
@@ -445,11 +441,6 @@ export async function addStaffUser(name: string, initials: string): Promise<void
     `INSERT INTO sylvias_staff (name, initials) VALUES ('${esc(name)}', '${esc(initials.toUpperCase())}')`
   );
 }
-
-export async function deleteStaffUser(id: number): Promise<void> {
-  await window.tasklet.sqlExec(`DELETE FROM sylvias_staff WHERE id = ${id}`);
-}
-
 
 export async function getStaffByInitials(initials: string): Promise<StaffUser | null> {
   const rows = await window.tasklet.sqlQuery(
@@ -531,6 +522,14 @@ export async function searchStock(query: string): Promise<StockItem[]> {
   const q = esc(query);
   const rows = await window.tasklet.sqlQuery(
     `SELECT * FROM sylvias_stock WHERE description LIKE '%${q}%' OR part_number LIKE '%${q}%' OR location LIKE '%${q}%' ORDER BY description ASC`
+  );
+  return rows as unknown as StockItem[];
+}
+
+export async function searchStockInStock(query: string): Promise<StockItem[]> {
+  const q = esc(query);
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT * FROM sylvias_stock WHERE (description LIKE '%${q}%' OR part_number LIKE '%${q}%' OR location LIKE '%${q}%') AND qty > 0 ORDER BY description ASC`
   );
   return rows as unknown as StockItem[];
 }
@@ -1851,9 +1850,16 @@ export async function getTableCounts(): Promise<Record<string, number>> {
     'sylvias_eod_cashup', 'sylvias_scan_staging',
     'sylvias_supplier_invoices', 'sylvias_supplier_invoice_payments',
     'sylvias_gift_vouchers', 'sylvias_settings',
+    'sylvias_email_recipients', 'sylvias_sent_emails',
   ];
-  // Single query using UNION ALL — 1 call instead of 25
-  const unionSql = tables.map(t => `SELECT '${t}' as tbl, COUNT(*) as cnt FROM ${t}`).join(' UNION ALL ');
+  // Query only tables that actually exist to avoid crashes
+  const existing = await window.tasklet.sqlQuery(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'sylvias_%'"
+  );
+  const existingSet = new Set((existing as any[]).map(r => r.name));
+  const validTables = tables.filter(t => existingSet.has(t));
+  if (validTables.length === 0) return {};
+  const unionSql = validTables.map(t => `SELECT '${t}' as tbl, COUNT(*) as cnt FROM ${t}`).join(' UNION ALL ');
   const rows = await window.tasklet.sqlQuery(unionSql);
   const counts: Record<string, number> = {};
   for (const row of rows) {
@@ -2936,12 +2942,4 @@ export async function deleteExpenseById(id: number): Promise<void> {
 
 export async function deleteSupplierById(id: number): Promise<void> {
   await window.tasklet.sqlExec(`DELETE FROM sylvias_suppliers WHERE id = ${id}`);
-}
-
-export async function searchStockInStock(query: string): Promise<StockItem[]> {
-  const q = esc(query);
-  const rows = await window.tasklet.sqlQuery(
-    `SELECT * FROM sylvias_stock WHERE (description LIKE '%${q}%' OR part_number LIKE '%${q}%' OR location LIKE '%${q}%') AND quantity > 0 ORDER BY description ASC`
-  );
-  return rows as unknown as StockItem[];
 }

@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StaffUser } from '../types';
-import { UserPlus, Trash2 } from 'lucide-react';
 import {
   getAllSettings, setSetting, getBankAccounts, addBankAccount, updateBankAccount,
   deleteBankAccount, clearTableData, clearAllTestData, getTableCounts,
   BankAccount, titleCase, getCategories, saveCategories, getLocations, saveLocations,
   getExpenseCategories, saveExpenseCategories, getStockMissingPartNumbers,
   findAllDuplicates, DuplicateGroup, mergeStockItems, deleteCustomerById, deleteExpenseById, deleteSupplierById,
-  getStaffUsers, addStaffUser, deleteStaffUser,
 } from '../utils/db';
 import { StockItem } from '../types';
+import { EmailSettings } from './EmailSettings';
 
 interface Props { currentUser: StaffUser; }
 
@@ -53,7 +52,7 @@ const CLEARABLE_TABLES: { table: string; label: string; icon: string; danger?: b
   { table: 'sylvias_bank_transactions', label: 'Bank Transactions', icon: '💱' },
 ];
 
-type Tab = 'staff' | 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'reset';
+type Tab = 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'reset';
 
 export function Admin({ currentUser }: Props) {
   const [tab, setTab] = useState<Tab>('business');
@@ -61,14 +60,6 @@ export function Admin({ currentUser }: Props) {
   const [dirty, setDirty] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState('');
   const [err, setErr] = useState('');
-
-  // Staff management
-  const [staffList, setStaffList] = useState<StaffUser[]>([]);
-  const [newStaffName, setNewStaffName] = useState('');
-  const [newStaffInitials, setNewStaffInitials] = useState('');
-  const [staffError, setStaffError] = useState('');
-  const [staffSuccess, setStaffSuccess] = useState('');
-  const [confirmDeleteStaff, setConfirmDeleteStaff] = useState<number | null>(null);
 
   // Bank accounts
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
@@ -121,7 +112,6 @@ export function Admin({ currentUser }: Props) {
 
   const loadCounts = useCallback(async () => {
     setTableCounts(await getTableCounts());
-    loadStaffList();
   }, []);
 
   const loadCats = useCallback(async () => {
@@ -136,11 +126,6 @@ export function Admin({ currentUser }: Props) {
     loadCounts();
     loadCats();
   }, [loadSettings, loadAccounts, loadCounts, loadCats]);
-
-  // Reload staff list when switching to Staff tab
-  useEffect(() => {
-    if (tab === 'staff') loadStaffList();
-  }, [tab]);
 
   const handleSettingChange = (key: string, value: string) => {
     setDirty(prev => ({ ...prev, [key]: value }));
@@ -230,90 +215,6 @@ export function Admin({ currentUser }: Props) {
   const s = (key: string) => ({ fontSize: 12, fontWeight: 600 as const, color: '#374151', marginBottom: 4, display: 'block' as const });
   const inp = { width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 };
 
-
-  async function loadStaffList() {
-    try {
-      const res = await fetch('/api/auth/staff-list');
-      if (res.ok) {
-        const data = await res.json();
-        setStaffList(Array.isArray(data) ? data : data.users || []);
-      } else {
-        const users = await getStaffUsers();
-        setStaffList(users);
-      }
-    } catch {
-      try { const users = await getStaffUsers(); setStaffList(users); } catch { /* ignore */ }
-    }
-  }
-
-  async function handleAddStaff() {
-    setStaffError(''); setStaffSuccess('');
-    const name = titleCase(newStaffName.trim());
-    const initials = newStaffInitials.trim().toUpperCase();
-    if (!name) { setStaffError('Please enter a name.'); return; }
-    if (!initials) { setStaffError('Please enter initials.'); return; }
-    if (staffList.some(s => s.initials === initials)) { setStaffError('Those initials are already in use.'); return; }
-    try {
-      // Use the public register endpoint (doesn't auto-login from admin)
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, initials }),
-      });
-      if (res.ok) {
-        setStaffSuccess(`${name} (${initials}) added successfully!`);
-        setNewStaffName(''); setNewStaffInitials('');
-        await loadStaffList();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setStaffError(data.error || 'Failed to add staff member.');
-      }
-    } catch {
-      // Fallback to direct DB
-      try {
-        await addStaffUser(name, initials);
-        setStaffSuccess(`${name} (${initials}) added successfully!`);
-        setNewStaffName(''); setNewStaffInitials('');
-        await loadStaffList();
-      } catch (e: any) {
-        setStaffError(e.message || 'Failed to add staff member.');
-      }
-    }
-  }
-
-  async function handleDeleteStaff(id: number) {
-    setStaffError(''); setStaffSuccess('');
-    if (id === currentUser.id) { setStaffError("You can't delete your own account while logged in!"); setConfirmDeleteStaff(null); return; }
-    try {
-      // Try server endpoint first
-      const res = await fetch('/api/auth/delete-staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-      if (res.ok) {
-        setStaffSuccess('Staff member removed.');
-        setConfirmDeleteStaff(null);
-        await loadStaffList();
-      } else {
-        // Fallback to direct DB
-        await deleteStaffUser(id);
-        setStaffSuccess('Staff member removed.');
-        setConfirmDeleteStaff(null);
-        await loadStaffList();
-      }
-    } catch {
-      try {
-        await deleteStaffUser(id);
-        setStaffSuccess('Staff member removed.');
-        setConfirmDeleteStaff(null);
-        await loadStaffList();
-      } catch (e: any) {
-        setStaffError(e.message || 'Failed to delete staff member.');
-      }
-    }
-  }
-
   return (
     <div style={{ padding: 24, maxWidth: 1000 }}>
       <h2 style={{ margin: '0 0 4px', fontSize: 22 }}>⚙️ Admin &amp; Settings</h2>
@@ -325,12 +226,12 @@ export function Admin({ currentUser }: Props) {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 20 }}>
         {([
-          { id: 'staff' as Tab, label: '👥 Staff' },
           { id: 'business' as Tab, label: '🏪 Business Details' },
           { id: 'bank' as Tab, label: '🏦 Bank Accounts' },
           { id: 'categories' as Tab, label: '📂 Categories & Locations' },
           { id: 'maintenance' as Tab, label: '🔧 Maintenance' },
           { id: 'duplicates' as Tab, label: '🔍 Duplicate Checker' },
+          { id: 'email' as Tab, label: '📧 Email Settings' },
           { id: 'reset' as Tab, label: '🧹 Test Data Reset' },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -345,81 +246,7 @@ export function Admin({ currentUser }: Props) {
       </div>
 
       {/* ── Business Details Tab ── */}
-
-
-      {tab === 'staff' && (
-        <div>
-          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16, color: '#1e293b' }}>👥 Staff Management</h3>
-
-          {staffError && <div style={{ background: '#fef2f2', color: '#dc2626', padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{staffError}</div>}
-          {staffSuccess && <div style={{ background: '#f0fdf4', color: '#16a34a', padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{staffSuccess}</div>}
-
-          {/* Add new staff */}
-          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 12, color: '#334155' }}>Add New Staff Member</div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'end', flexWrap: 'wrap' }}>
-              <div>
-                <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Full Name</label>
-                <input value={newStaffName} onChange={e => setNewStaffName(e.target.value)}
-                  placeholder="e.g. Jane Smith" style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, width: 220 }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 4 }}>Initials</label>
-                <input value={newStaffInitials} onChange={e => setNewStaffInitials(e.target.value)}
-                  placeholder="e.g. JS" maxLength={4} style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 14, width: 80, textTransform: 'uppercase' }} />
-              </div>
-              <button onClick={handleAddStaff}
-                style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 18px', fontWeight: 600, cursor: 'pointer', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <UserPlus size={16} /> Add Staff
-              </button>
-            </div>
-          </div>
-
-          {/* Staff list */}
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 10, color: '#334155' }}>Current Staff ({staffList.length})</div>
-          {staffList.length === 0 ? (
-            <div style={{ color: '#9ca3af', fontSize: 14, padding: 20, textAlign: 'center' }}>No staff members registered yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {staffList.map(s => (
-                <div key={s.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#ede9fe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#7c3aed', fontSize: 15 }}>
-                      {s.initials}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{s.name}</div>
-                      <div style={{ fontSize: 12, color: '#9ca3af' }}>{s.created_at ? `Joined ${new Date(s.created_at).toLocaleDateString('en-GB')}` : ''}</div>
-                    </div>
-                    {s.id === currentUser.id && <span style={{ background: '#dcfce7', color: '#16a34a', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600, marginLeft: 8 }}>You</span>}
-                  </div>
-                  <div>
-                    {confirmDeleteStaff === s.id ? (
-                      <div style={{ background: '#fffbeb', border: '1px solid #fbbf24', borderRadius: 8, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 13, color: '#92400e' }}>Remove {s.name}?</span>
-                        <button onClick={() => handleDeleteStaff(s.id)}
-                          style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>Yes</button>
-                        <button onClick={() => setConfirmDeleteStaff(null)}
-                          style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 12px', fontSize: 12, cursor: 'pointer' }}>No</button>
-                      </div>
-                    ) : (
-                      s.id !== currentUser.id && (
-                        <button onClick={() => setConfirmDeleteStaff(s.id)}
-                          style={{ background: 'none', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 10px', cursor: 'pointer', color: '#9ca3af' }}
-                          title="Remove staff member">
-                          <Trash2 size={16} />
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-            {tab === 'business' && (
+      {tab === 'business' && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {SETTING_KEYS.map(sk => (
@@ -967,6 +794,11 @@ export function Admin({ currentUser }: Props) {
             </>
           )}
         </div>
+      )}
+
+      {/* ── Email Settings Tab ── */}
+      {tab === 'email' && (
+        <EmailSettings currentUser={currentUser} />
       )}
 
       {/* ── Test Data Reset Tab ── */}
