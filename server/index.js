@@ -102,12 +102,48 @@ for (const sql of ALTER_SQLS) {
 
 console.log('Database initialized with all tables');
 
+// ── SQLite Session Store (sessions persist across container restarts) ──
+class SQLiteSessionStore extends session.Store {
+  constructor(db) {
+    super();
+    this.db = db;
+    db.exec(`CREATE TABLE IF NOT EXISTS sessions (
+      sid TEXT PRIMARY KEY,
+      sess TEXT NOT NULL,
+      expired INTEGER NOT NULL
+    )`);
+    this.getStmt = db.prepare('SELECT sess FROM sessions WHERE sid = ? AND expired > ?');
+    this.setStmt = db.prepare('INSERT OR REPLACE INTO sessions (sid, sess, expired) VALUES (?, ?, ?)');
+    this.destroyStmt = db.prepare('DELETE FROM sessions WHERE sid = ?');
+    this.cleanupStmt = db.prepare('DELETE FROM sessions WHERE expired < ?');
+    setInterval(() => { try { this.cleanupStmt.run(Date.now()); } catch(e) {} }, 15 * 60 * 1000);
+  }
+  get(sid, cb) {
+    try {
+      const row = this.getStmt.get(sid, Date.now());
+      cb(null, row ? JSON.parse(row.sess) : null);
+    } catch (e) { cb(e); }
+  }
+  set(sid, sess, cb) {
+    try {
+      const maxAge = (sess.cookie && sess.cookie.maxAge) || 86400000;
+      this.setStmt.run(sid, JSON.stringify(sess), Date.now() + maxAge);
+      cb(null);
+    } catch (e) { cb(e); }
+  }
+  destroy(sid, cb) {
+    try { this.destroyStmt.run(sid); cb(null); } catch (e) { cb(e); }
+  }
+  touch(sid, sess, cb) { this.set(sid, sess, cb); }
+}
+
 
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.text({ limit: '50mb' }));
 app.use(session({
+  store: new SQLiteSessionStore(db),
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
