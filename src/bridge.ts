@@ -2,12 +2,15 @@
 // This allows ALL existing db.ts and component code to work unchanged
 
 let sessionExpiredShown = false;
+let hasEverAuthenticated = false;
 
 function showSessionExpired() {
+  // Only show the banner if the user previously had a working session
+  // (don't show on initial page load before login)
+  if (!hasEverAuthenticated) return;
   if (sessionExpiredShown) return;
   sessionExpiredShown = true;
   
-  // Create a visible banner that the user can't miss
   const banner = document.createElement('div');
   banner.id = 'session-expired-banner';
   banner.style.cssText = `
@@ -26,6 +29,14 @@ function showSessionExpired() {
   document.body.prepend(banner);
 }
 
+function clearSessionExpired() {
+  if (!sessionExpiredShown) return;
+  sessionExpiredShown = false;
+  hasEverAuthenticated = true;
+  const banner = document.getElementById('session-expired-banner');
+  if (banner) banner.remove();
+}
+
 async function apiFetch(url: string, body: any): Promise<any> {
   const res = await fetch(url, {
     method: 'POST',
@@ -33,10 +44,17 @@ async function apiFetch(url: string, body: any): Promise<any> {
     credentials: 'include',
     body: JSON.stringify(body)
   });
+  if (res.status === 401) {
+    showSessionExpired();
+    throw new Error('Not authenticated');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || res.statusText);
   }
+  // Successful authenticated call — mark session as active and clear any stale banner
+  hasEverAuthenticated = true;
+  clearSessionExpired();
   return res.json();
 }
 
@@ -46,10 +64,7 @@ const bridge = {
     try {
       return await apiFetch('/api/sql/query', { sql });
     } catch (e: any) {
-      if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
-        showSessionExpired();
-        return [];
-      }
+      if (e?.message === 'Not authenticated') return [];
       throw e;
     }
   },
@@ -58,10 +73,7 @@ const bridge = {
     try {
       return await apiFetch('/api/sql/exec', { sql });
     } catch (e: any) {
-      if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
-        showSessionExpired();
-        return { rowsAffected: 0 };
-      }
+      if (e?.message === 'Not authenticated') return { rowsAffected: 0 };
       throw e;
     }
   },
@@ -71,10 +83,7 @@ const bridge = {
     try {
       return await apiFetch('/api/sql/batch', { statements });
     } catch (e: any) {
-      if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
-        showSessionExpired();
-        return { ok: false };
-      }
+      if (e?.message === 'Not authenticated') return { ok: false };
       throw e;
     }
   },
@@ -84,10 +93,7 @@ const bridge = {
     try {
       return await apiFetch('/api/command', { command, timeout });
     } catch (e: any) {
-      if (e?.message?.includes('Not authenticated') || e?.message?.includes('401')) {
-        showSessionExpired();
-        return { log: '', exitCode: 1 };
-      }
+      if (e?.message === 'Not authenticated') return { log: '', exitCode: 1 };
       throw e;
     }
   },

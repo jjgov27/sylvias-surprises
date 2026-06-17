@@ -203,11 +203,16 @@ export default function App() {
   }
 
   function handleLogin(user: StaffUser) {
+    // Clear any session-expired banner from bridge
+    const banner = document.getElementById('session-expired-banner');
+    if (banner) banner.remove();
     setCurrentUser(user);
     setView('dashboard');
   }
 
   function handleLogout() {
+    // Destroy server-side session
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     setCurrentUser(null);
     setView('storefront');
   }

@@ -37,6 +37,22 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   }
 
   async function handleQuickLogin(user: StaffUser) {
+    try {
+      // Create server-side session
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: user.name, initials: user.initials })
+      });
+      if (!res.ok) {
+        setError('Login failed. Please try again.');
+        return;
+      }
+    } catch {
+      setError('Unable to connect. Please try again.');
+      return;
+    }
     onLogin(user);
   }
 
@@ -52,6 +68,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
       const user = users.find((u: any) => u.initials?.toUpperCase() === initials.trim().toUpperCase());
       if (!user) {
         setError('Initials not recognised. Please register first.');
+        return;
+      }
+      // Create server-side session
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ name: user.name, initials: user.initials })
+      });
+      if (!loginRes.ok) {
+        setError('Login failed. Please try again.');
         return;
       }
       onLogin(user);
