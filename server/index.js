@@ -347,16 +347,6 @@ app.post('/api/admin/reset', requireAuth, (req, res) => {
   res.json({ ok: true, tablesCleared: tables.length });
 });
 
-// Serve React app
-const distPath = path.join(__dirname, '..', 'dist');
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-}
-
 // ── DB Backup/Restore (admin only) ──
 app.get('/api/admin/db-backup', requireAuth, (req, res) => {
   try {
@@ -405,6 +395,16 @@ app.post('/api/admin/db-restore', requireAuth, (req, res) => {
     }
   });
 });
+
+// Serve React app
+const distPath = path.join(__dirname, '..', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 app.listen(PORT, () => {
   console.log('Sylvias Surprises running on port ' + PORT);
