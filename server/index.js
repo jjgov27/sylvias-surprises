@@ -81,6 +81,13 @@ const ALTER_SQLS = [
   "ALTER TABLE sylvias_suppliers ADD COLUMN postcode TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE sylvias_gift_vouchers ADD COLUMN recipient_customer_id INTEGER DEFAULT NULL",
   "ALTER TABLE sylvias_bullion ADD COLUMN purchase_payment_method TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN actual_qty INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN status TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN checked_by TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN checked_at TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN signoff_by TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN signoff_at TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_stock_check_items ADD COLUMN resolution TEXT NOT NULL DEFAULT ''",
 ];
 
 // Create all tables
