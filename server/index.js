@@ -10,13 +10,55 @@ const multer = require('multer');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'sylvias-dev-secret-change-me';
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'sylvias.db');
-const UPLOADS_DIR = path.join(__dirname, '..', 'data', 'uploads');
+// In production, default to the persistent volume at /data
+const DB_PATH = process.env.DB_PATH || (process.env.NODE_ENV === 'production' ? '/data/sylvias.db' : path.join(__dirname, '..', 'data', 'sylvias.db'));
+const UPLOADS_DIR = process.env.NODE_ENV === 'production' ? '/data/uploads' : path.join(__dirname, '..', 'data', 'uploads');
+const BACKUP_DIR = process.env.NODE_ENV === 'production' ? '/data/backups' : path.join(__dirname, '..', 'data', 'backups');
 const TEST_MODE = process.env.TEST_MODE === 'true' || process.env.NODE_ENV !== 'production';
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+fs.mkdirSync(BACKUP_DIR, { recursive: true });
 fs.mkdirSync('/tmp/sylvias-pdfs', { recursive: true });
+
+// ── One-time migration: move DB from old /app/data/ path to volume ──
+const OLD_DB_PATH = path.join(__dirname, '..', 'data', 'sylvias.db');
+if (DB_PATH !== OLD_DB_PATH && fs.existsSync(OLD_DB_PATH) && !fs.existsSync(DB_PATH)) {
+  try {
+    fs.copyFileSync(OLD_DB_PATH, DB_PATH);
+    console.log(`Migrated database from ${OLD_DB_PATH} to ${DB_PATH}`);
+    // Also copy WAL/SHM if they exist
+    if (fs.existsSync(OLD_DB_PATH + '-wal')) fs.copyFileSync(OLD_DB_PATH + '-wal', DB_PATH + '-wal');
+    if (fs.existsSync(OLD_DB_PATH + '-shm')) fs.copyFileSync(OLD_DB_PATH + '-shm', DB_PATH + '-shm');
+  } catch (e) {
+    console.error('DB migration failed:', e.message);
+  }
+}
+
+// ── Auto-backup before startup ──
+// If a database already exists, back it up before we touch anything
+if (fs.existsSync(DB_PATH)) {
+  const now = new Date();
+  const ts = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const backupFile = path.join(BACKUP_DIR, `sylvias-pre-deploy-${ts}.db`);
+  try {
+    fs.copyFileSync(DB_PATH, backupFile);
+    console.log(`Pre-deploy backup saved: ${backupFile}`);
+    // Keep only last 10 pre-deploy backups to avoid filling the volume
+    const backups = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.startsWith('sylvias-pre-deploy-') && f.endsWith('.db'))
+      .sort();
+    while (backups.length > 10) {
+      const oldest = backups.shift();
+      fs.unlinkSync(path.join(BACKUP_DIR, oldest));
+      console.log(`Cleaned old backup: ${oldest}`);
+    }
+  } catch (e) {
+    console.error('Pre-deploy backup failed:', e.message);
+  }
+} else {
+  console.log('No existing database found — fresh start');
+}
 
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
