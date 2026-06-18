@@ -408,10 +408,9 @@ export async function initDB(): Promise<void> {
 
   // Always run CREATE TABLE IF NOT EXISTS — they are idempotent and ensure
   // any newly-added tables get created even if older tables already exist.
-  for (let i = 0; i < INIT_TABLES.length; i += 5) {
-    await Promise.all(INIT_TABLES.slice(i, i + 5).map(sql =>
-      window.tasklet.sqlExec(sql).catch((e: unknown) => console.warn('Table init:', e))
-    ));
+  // Sequential to avoid version conflicts
+  for (const sql of INIT_TABLES) {
+    await window.tasklet.sqlExec(sql).catch((e: unknown) => console.warn('Table init:', e));
   }
 
   // Run ALTER TABLE migrations — skip if latest migration column already exists
@@ -420,10 +419,8 @@ export async function initDB(): Promise<void> {
     await window.tasklet.sqlQuery("SELECT purchase_payment_method FROM sylvias_bullion LIMIT 1");
   } catch { needsAlters = true; }
   if (needsAlters) {
-    for (let i = 0; i < ALTER_SQLS.length; i += 5) {
-      await Promise.all(ALTER_SQLS.slice(i, i + 5).map(sql =>
-        window.tasklet.sqlExec(sql).catch(() => { /* column already exists */ })
-      ));
+    for (const sql of ALTER_SQLS) {
+      await window.tasklet.sqlExec(sql).catch(() => { /* column already exists */ });
     }
   }
   initialized = true;
@@ -460,9 +457,10 @@ export async function getAllStock(): Promise<StockItem[]> {
 }
 
 export async function addStockItem(item: Omit<StockItem, 'id' | 'created_at' | 'on_offer' | 'offer_price' | 'supplier_id' | 'source_type' | 'entry_type' | 'purchase_date' | 'purchase_payment_method' | 'purchased_by'> & { no_partnumber_initials?: string }): Promise<void> {
+  const safeQty = Math.max(1, parseInt(String(item.qty)) || 1);
   await window.tasklet.sqlExec(
     `INSERT INTO sylvias_stock (part_number, description, photo, qty, location, cost, rrp, entered_by, category, no_partnumber_initials)
-     VALUES ('${esc(item.part_number)}', '${esc(item.description)}', '${esc(item.photo)}', ${item.qty}, '${esc(item.location)}', ${item.cost}, ${item.rrp}, '${esc(item.entered_by)}', '${esc(item.category)}', '${esc(item.no_partnumber_initials || '')}')`
+     VALUES ('${esc(item.part_number)}', '${esc(item.description)}', '${esc(item.photo)}', ${safeQty}, '${esc(item.location)}', ${item.cost}, ${item.rrp}, '${esc(item.entered_by)}', '${esc(item.category)}', '${esc(item.no_partnumber_initials || '')}')`
   );
   await learnItemName(item.description);
 }
@@ -1831,11 +1829,10 @@ export async function clearAllTestData(): Promise<Record<string, number>> {
     'sylvias_bank_transactions',
   ];
   const results: Record<string, number> = {};
-  // Batch deletes in groups of 5 to stay well under rate limit
-  for (let i = 0; i < tables.length; i += 5) {
-    const batch = tables.slice(i, i + 5);
-    const batchResults = await Promise.all(batch.map(t => clearTableData(t)));
-    batch.forEach((t, idx) => { results[t] = batchResults[idx].deleted; });
+  // Sequential deletes to avoid version conflicts
+  for (const t of tables) {
+    const r = await clearTableData(t);
+    results[t] = r.deleted;
   }
   return results;
 }

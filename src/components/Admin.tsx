@@ -224,7 +224,7 @@ export function Admin({ currentUser }: Props) {
       {saved && <div style={{ background: '#f0fdf4', color: '#16a34a', padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{saved}</div>}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {([
           { id: 'business' as Tab, label: '🏪 Business Details' },
           { id: 'bank' as Tab, label: '🏦 Bank Accounts' },
@@ -238,7 +238,7 @@ export function Admin({ currentUser }: Props) {
             style={{
               padding: '10px 20px', fontSize: 14, fontWeight: tab === t.id ? 700 : 500, cursor: 'pointer',
               background: 'none', border: 'none', borderBottom: tab === t.id ? '3px solid #7c3aed' : '3px solid transparent',
-              color: tab === t.id ? '#7c3aed' : '#6b7280', marginBottom: -2,
+              color: tab === t.id ? '#7c3aed' : '#6b7280', marginBottom: -2, whiteSpace: 'nowrap' as const,
             }}>
             {t.label}
           </button>
