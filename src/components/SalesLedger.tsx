@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StaffUser, Sale, SaleItem, Expense } from '../types';
-import { getSalesByDateRange, getSaleItems, getExpensesByDateRange, getSalesSplitByDateRange, SalesSplit } from '../utils/db';
-import { ChevronDown, ChevronRight, Calendar, TrendingUp, TrendingDown, Download, Handshake, Package } from 'lucide-react';
+import { getSalesByDateRange, getSaleItems, getExpensesByDateRange, getSalesSplitByDateRange, SalesSplit, deleteSaleWithAudit, deleteExpenseWithAudit, editSaleTotalWithAudit, getAuditLog, AuditEntry } from '../utils/db';
+import { ChevronDown, ChevronRight, Calendar, TrendingUp, TrendingDown, Download, Handshake, Package, Trash2, Edit3, History } from 'lucide-react';
 
 interface Props {
   currentUser: StaffUser;
@@ -26,6 +26,17 @@ export const SalesLedger: React.FC<Props> = ({ currentUser, onViewInvoice }) => 
   const [allSaleItems, setAllSaleItems] = useState<Record<number, SaleItem[]>>({});
   const [viewFilter, setViewFilter] = useState<'all' | 'sales' | 'expenses' | 'consignment'>('all');
   const [generating, setGenerating] = useState(false);
+  // Delete/edit confirmation state
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'sale' | 'expense'; id: number; label: string } | null>(null);
+  const [editSale, setEditSale] = useState<{ id: number; invoice: string; currentTotal: number } | null>(null);
+  const [editTotal, setEditTotal] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  // Audit trail
+  const [showAudit, setShowAudit] = useState(false);
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
 
   async function loadData() {
     setLoading(true);
@@ -56,6 +67,55 @@ export const SalesLedger: React.FC<Props> = ({ currentUser, onViewInvoice }) => 
   }
 
   useEffect(() => { loadData(); }, [dateFrom, dateTo]);
+
+  async function handleDeleteSale(saleId: number) {
+    setActionBusy(true);
+    try {
+      await deleteSaleWithAudit(saleId, currentUser.initials, deleteReason || 'No reason given');
+      setConfirmDelete(null);
+      setDeleteReason('');
+      setActionMsg({ text: 'Sale deleted successfully', type: 'success' });
+      setTimeout(() => setActionMsg(null), 3000);
+      loadData();
+    } catch (e) { setActionMsg({ text: 'Failed to delete sale', type: 'error' }); }
+    finally { setActionBusy(false); }
+  }
+
+  async function handleDeleteExpense(expenseId: number) {
+    setActionBusy(true);
+    try {
+      await deleteExpenseWithAudit(expenseId, currentUser.initials, deleteReason || 'No reason given');
+      setConfirmDelete(null);
+      setDeleteReason('');
+      setActionMsg({ text: 'Expense deleted successfully', type: 'success' });
+      setTimeout(() => setActionMsg(null), 3000);
+      loadData();
+    } catch (e) { setActionMsg({ text: 'Failed to delete expense', type: 'error' }); }
+    finally { setActionBusy(false); }
+  }
+
+  async function handleEditSaleTotal() {
+    if (!editSale) return;
+    const newVal = parseFloat(editTotal);
+    if (isNaN(newVal) || newVal < 0) { setActionMsg({ text: 'Please enter a valid amount', type: 'error' }); return; }
+    setActionBusy(true);
+    try {
+      await editSaleTotalWithAudit(editSale.id, newVal, currentUser.initials, editReason || 'No reason given');
+      setEditSale(null);
+      setEditTotal('');
+      setEditReason('');
+      setActionMsg({ text: 'Sale updated successfully', type: 'success' });
+      setTimeout(() => setActionMsg(null), 3000);
+      loadData();
+    } catch (e) { setActionMsg({ text: 'Failed to update sale', type: 'error' }); }
+    finally { setActionBusy(false); }
+  }
+
+  async function loadAuditLog() {
+    const entries = await getAuditLog(undefined, undefined, 100);
+    setAuditEntries(entries);
+    setShowAudit(true);
+  }
 
   async function toggleExpand(key: string, saleId?: number) {
     if (expandedId === key) {
@@ -198,7 +258,7 @@ print('OK')
       await window.tasklet.writeFileToDisk('/tmp/gen_ledger_pdf.py', script);
       await window.tasklet.writeFileToDisk('/tmp/ledger_data.json', dataJson);
       const result = await window.tasklet.runCommand(
-        `cd /tmp && python3 gen_ledger_pdf.py "$(cat /tmp/ledger_data.json)"`, 120);
+        `cd /tmp && uv run --with reportlab python3 gen_ledger_pdf.py "$(cat /tmp/ledger_data.json)"`, 120);
       if (result.exitCode === 0) {
         const b64 = await window.tasklet.runCommand(`base64 -w0 '${outPath}'`);
         if (b64.exitCode === 0 && b64.log) {
@@ -285,6 +345,122 @@ print('OK')
         )}
       </div>
 
+      {/* Action message */}
+      {actionMsg && (
+        <div className={`alert ${actionMsg.type === 'success' ? 'alert-success' : 'alert-error'} mb-4`}>
+          <span>{actionMsg.text}</span>
+        </div>
+      )}
+
+      {/* Inline delete confirmation banner */}
+      {confirmDelete && (
+        <div className="alert bg-yellow-50 border-yellow-300 border mb-4">
+          <div className="w-full">
+            <p className="font-semibold text-yellow-800">
+              ⚠️ Delete {confirmDelete.type === 'sale' ? 'Sale' : 'Expense'}: {confirmDelete.label}?
+            </p>
+            <p className="text-sm text-yellow-700 mt-1">This will be permanently removed. An audit trail record will be kept.</p>
+            <div className="form-control mt-2">
+              <label className="label py-0"><span className="label-text text-xs font-semibold">Reason for deletion</span></label>
+              <input className="input input-bordered input-sm w-full max-w-md" placeholder="e.g. Duplicate entry, entered in error..."
+                value={deleteReason} onChange={e => setDeleteReason(e.target.value)} />
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button className="btn btn-error btn-sm" disabled={actionBusy}
+                onClick={() => confirmDelete.type === 'sale' ? handleDeleteSale(confirmDelete.id) : handleDeleteExpense(confirmDelete.id)}>
+                {actionBusy ? <span className="loading loading-spinner loading-xs" /> : null} Yes, Delete
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setConfirmDelete(null); setDeleteReason(''); }}>No, Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inline edit sale total banner */}
+      {editSale && (
+        <div className="alert bg-yellow-50 border-yellow-300 border mb-4">
+          <div className="w-full">
+            <p className="font-semibold text-yellow-800">
+              ✏️ Edit Sale Total: {editSale.invoice} (currently £{editSale.currentTotal.toFixed(2)})
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <div className="form-control">
+                <label className="label py-0"><span className="label-text text-xs font-semibold">New Total (£)</span></label>
+                <input className="input input-bordered input-sm w-32" value={editTotal}
+                  onChange={e => setEditTotal(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="form-control flex-1 min-w-[200px]">
+                <label className="label py-0"><span className="label-text text-xs font-semibold">Reason for change</span></label>
+                <input className="input input-bordered input-sm w-full" value={editReason}
+                  onChange={e => setEditReason(e.target.value)} placeholder="e.g. Incorrect amount, price adjustment..." />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button className="btn btn-warning btn-sm" disabled={actionBusy} onClick={handleEditSaleTotal}>
+                {actionBusy ? <span className="loading loading-spinner loading-xs" /> : null} Yes, Update
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setEditSale(null); setEditTotal(''); setEditReason(''); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit trail button */}
+      <div className="flex justify-end mb-2">
+        <button className="btn btn-ghost btn-xs gap-1" onClick={loadAuditLog}>
+          <History size={12} /> Audit Trail
+        </button>
+      </div>
+
+      {/* Audit trail modal */}
+      {showAudit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-base-100 rounded-xl p-6 w-[700px] max-w-[95%] max-h-[80vh] overflow-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold flex items-center gap-2"><History size={18} /> Audit Trail</h3>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowAudit(false)}>✕</button>
+            </div>
+            {auditEntries.length === 0 ? (
+              <p className="text-center text-base-content/50 py-8">No audit entries yet</p>
+            ) : (
+              <table className="table table-sm w-full">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Action</th>
+                    <th>Table</th>
+                    <th>ID</th>
+                    <th>By</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditEntries.map(a => {
+                    let detailSummary = '';
+                    try {
+                      const d = JSON.parse(a.details);
+                      if (d.reason) detailSummary = d.reason;
+                      if (d.old_total !== undefined) detailSummary += ` (£${d.old_total.toFixed(2)} → £${d.new_total.toFixed(2)})`;
+                      if (d.sale?.invoice) detailSummary += ` [${d.sale.invoice}]`;
+                    } catch { detailSummary = a.details; }
+                    return (
+                      <tr key={a.id}>
+                        <td className="text-xs whitespace-nowrap">{new Date(a.performed_at + 'Z').toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                        <td><span className={`badge badge-sm ${a.action === 'DELETE' ? 'badge-error' : 'badge-warning'}`}>{a.action}</span></td>
+                        <td className="text-xs">{a.table_name.replace('sylvias_', '')}</td>
+                        <td className="text-xs">#{a.record_id}</td>
+                        <td className="font-semibold">{a.performed_by}</td>
+                        <td className="text-xs max-w-[200px] truncate" title={detailSummary}>{detailSummary}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-8"><span className="loading loading-spinner" /></div>
       ) : Object.keys(byDate).length === 0 ? (
@@ -316,6 +492,7 @@ print('OK')
                     <th>Status</th>
                     <th>By</th>
                     <th className="text-right">Amount</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -369,10 +546,22 @@ print('OK')
                                 <div className="text-xs text-error">Bal: {fmt(sale.balance_due)}</div>
                               )}
                             </td>
+                            <td>
+                              <div className="flex gap-1">
+                                <button className="btn btn-ghost btn-xs" title="Edit total"
+                                  onClick={e => { e.stopPropagation(); setEditSale({ id: sale.id, invoice: sale.invoice_number || `#${sale.id}`, currentTotal: sale.total }); setEditTotal(String(sale.total)); setEditReason(''); setConfirmDelete(null); }}>
+                                  <Edit3 size={12} />
+                                </button>
+                                <button className="btn btn-ghost btn-xs text-error" title="Delete sale"
+                                  onClick={e => { e.stopPropagation(); setConfirmDelete({ type: 'sale', id: sale.id, label: `${sale.invoice_number || '#' + sale.id} — ${sale.customer_name} — ${fmt(sale.total)}` }); setDeleteReason(''); setEditSale(null); }}>
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
                           {expandedId === key && (
                             <tr>
-                              <td colSpan={9} className="bg-base-200/50 p-3">
+                              <td colSpan={10} className="bg-base-200/50 p-3">
                                 <table className="table table-xs w-full">
                                   <thead>
                                     <tr>
@@ -432,6 +621,12 @@ print('OK')
                           <td>—</td>
                           <td>{exp.paid_by || exp.entered_by}</td>
                           <td className="text-right font-semibold text-error">-{fmt(exp.amount)}</td>
+                          <td>
+                            <button className="btn btn-ghost btn-xs text-error" title="Delete expense"
+                              onClick={() => { setConfirmDelete({ type: 'expense', id: exp.id, label: `${exp.description} — ${fmt(exp.amount)}` }); setDeleteReason(''); setEditSale(null); }}>
+                              <Trash2 size={12} />
+                            </button>
+                          </td>
                         </tr>
                       );
                     }

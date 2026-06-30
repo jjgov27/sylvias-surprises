@@ -52,6 +52,7 @@ export function Bullion({ user }: Props) {
   const [sellDate, setSellDate] = useState(today());
   const [sellPrice, setSellPrice] = useState('');
   const [sellMethod, setSellMethod] = useState('cash');
+  const [sellBusy, setSellBusy] = useState(false);
   const [buyerName, setBuyerName] = useState('');
   const [receiptItem, setReceiptItem] = useState<BullionItem | null>(null);
   const [receiptCustomer, setReceiptCustomer] = useState<Customer | null>(null);
@@ -232,9 +233,10 @@ export function Bullion({ user }: Props) {
   };
 
   const handleSell = async () => {
-    if (!sellModal) return;
+    if (!sellModal || sellBusy) return;
     const sp = parseFloat(sellPrice) || 0;
     if (sp <= 0) { setErr('Sale price is required'); return; }
+    setSellBusy(true);
 
     let custId: number | null = null;
     let custName = '';
@@ -263,22 +265,25 @@ export function Bullion({ user }: Props) {
       custForReceipt = saved;
     }
 
-    await sellBullion(sellModal.id, sellDate, sp, sellMethod, custName, custId, user.initials);
-    const soldItem: BullionItem = {
-      ...sellModal,
-      sell_date: sellDate,
-      sale_price: sp,
-      payment_method: sellMethod,
-      buyer_name: custName,
-      customer_id: custId,
-      status: 'sold',
-    };
-    setSellModal(null); setSellPrice(''); setSellDate(today()); setSellMethod('cash'); setBuyerName(''); setErr('');
-    setSelectedCustomer(null); setCustSearch(''); setCustResults([]); setShowCustDropdown(false); setShowNewCustForm(false);
-    setNewCust({ salutation: '', first_name: '', surname: '', address_line1: '', address_line2: '', address_line3: '', postcode: '', phone: '', email: '' });
-    setReceiptItem(soldItem);
-    setReceiptCustomer(custForReceipt);
-    load();
+    try {
+      await sellBullion(sellModal.id, sellDate, sp, sellMethod, custName, custId, user.initials);
+      const soldItem: BullionItem = {
+        ...sellModal,
+        sell_date: sellDate,
+        sale_price: sp,
+        payment_method: sellMethod,
+        buyer_name: custName,
+        customer_id: custId,
+        status: 'sold',
+      };
+      setSellModal(null); setSellPrice(''); setSellDate(today()); setSellMethod('cash'); setBuyerName(''); setErr('');
+      setSelectedCustomer(null); setCustSearch(''); setCustResults([]); setShowCustDropdown(false); setShowNewCustForm(false);
+      setNewCust({ salutation: '', first_name: '', surname: '', address_line1: '', address_line2: '', address_line3: '', postcode: '', phone: '', email: '' });
+      setReceiptItem(soldItem);
+      setReceiptCustomer(custForReceipt);
+      load();
+    } catch (e) { setErr('Failed to record sale — please try again'); }
+    finally { setSellBusy(false); }
   };
 
   const paymentLabel = (m: string) => {
@@ -454,7 +459,7 @@ c.save()
 print("OK")
 `;
       await window.tasklet.writeFileToDisk('/tmp/gen_bullion_receipt.py', pyScript);
-      const result = await window.tasklet.runCommand('cd /tmp && python3 gen_bullion_receipt.py', 120);
+      const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab gen_bullion_receipt.py', 120);
 
       if (!result.log.includes('OK')) {
         setErr('PDF generation failed: ' + result.log);
@@ -676,7 +681,7 @@ c.save()
 print("OK")
 `;
       await window.tasklet.writeFileToDisk('/tmp/gen_bullion_holding.py', pyScript);
-      const result = await window.tasklet.runCommand('cd /tmp && python3 gen_bullion_holding.py', 120);
+      const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab gen_bullion_holding.py', 120);
       
       if (!result.log.includes('OK')) {
         setErr('PDF generation failed: ' + result.log);
@@ -919,9 +924,9 @@ print("OK")
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={handleSell}
-                style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: 'pointer', flex: 1 }}>
-                Confirm Sale
+              <button onClick={handleSell} disabled={sellBusy}
+                style={{ background: sellBusy ? '#86efac' : '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontWeight: 600, cursor: sellBusy ? 'not-allowed' : 'pointer', flex: 1, opacity: sellBusy ? 0.7 : 1 }}>
+                {sellBusy ? '⏳ Recording...' : 'Confirm Sale'}
               </button>
               <button onClick={() => { setSellModal(null); setErr(''); setSelectedCustomer(null); setCustSearch(''); setCustResults([]); setShowCustDropdown(false); setShowNewCustForm(false); }}
                 style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '10px 24px', cursor: 'pointer' }}>

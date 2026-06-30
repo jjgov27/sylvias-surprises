@@ -367,6 +367,15 @@ const INIT_TABLES = [
     sections_used TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'sent'
   )`,
+  `CREATE TABLE IF NOT EXISTS sylvias_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    record_id INTEGER NOT NULL,
+    details TEXT NOT NULL DEFAULT '',
+    performed_by TEXT NOT NULL DEFAULT '',
+    performed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
 ];
 
 const ALTER_SQLS = [
@@ -611,6 +620,7 @@ export async function createSale(sale: {
   status?: string;
   sale_type?: string;
   due_date?: string;
+  sale_date?: string;
 }): Promise<number> {
   const custId = sale.customer_id !== null ? String(sale.customer_id) : 'NULL';
   const amountPaid = sale.amount_paid ?? sale.total;
@@ -618,9 +628,10 @@ export async function createSale(sale: {
   const status = sale.status ?? 'paid';
   const saleType = sale.sale_type ?? 'receipt';
   const dueDate = sale.due_date ?? '';
+  const saleDate = sale.sale_date || new Date().toISOString().replace('T', ' ').slice(0, 19);
   await window.tasklet.sqlExec(
-    `INSERT INTO sylvias_sales (customer_name, customer_id, payment_method, total, sold_by, invoice_number, notes, amount_paid, balance_due, status, sale_type, due_date)
-     VALUES ('${esc(sale.customer_name)}', ${custId}, '${esc(sale.payment_method)}', ${sale.total}, '${esc(sale.sold_by)}', '${esc(sale.invoice_number)}', '${esc(sale.notes)}', ${amountPaid}, ${balanceDue}, '${esc(status)}', '${esc(saleType)}', '${esc(dueDate)}')`
+    `INSERT INTO sylvias_sales (customer_name, customer_id, payment_method, total, sold_by, invoice_number, notes, amount_paid, balance_due, status, sale_type, due_date, sale_date)
+     VALUES ('${esc(sale.customer_name)}', ${custId}, '${esc(sale.payment_method)}', ${sale.total}, '${esc(sale.sold_by)}', '${esc(sale.invoice_number)}', '${esc(sale.notes)}', ${amountPaid}, ${balanceDue}, '${esc(status)}', '${esc(saleType)}', '${esc(dueDate)}', '${esc(saleDate)}')`
   );
   const rows = await window.tasklet.sqlQuery(
     `SELECT id FROM sylvias_sales WHERE invoice_number = '${esc(sale.invoice_number)}' ORDER BY id DESC LIMIT 1`
@@ -2939,4 +2950,105 @@ export async function deleteExpenseById(id: number): Promise<void> {
 
 export async function deleteSupplierById(id: number): Promise<void> {
   await window.tasklet.sqlExec(`DELETE FROM sylvias_suppliers WHERE id = ${id}`);
+}
+
+// ── Audit Log ──
+
+export interface AuditEntry {
+  id: number;
+  action: string;
+  table_name: string;
+  record_id: number;
+  details: string;
+  performed_by: string;
+  performed_at: string;
+}
+
+export async function logAudit(action: string, tableName: string, recordId: number, details: string, performedBy: string): Promise<void> {
+  await window.tasklet.sqlExec(
+    `INSERT INTO sylvias_audit_log (action, table_name, record_id, details, performed_by)
+     VALUES ('${esc(action)}', '${esc(tableName)}', ${recordId}, '${esc(details)}', '${esc(performedBy)}')`
+  );
+}
+
+export async function getAuditLog(tableName?: string, recordId?: number, limit: number = 50): Promise<AuditEntry[]> {
+  let where = '1=1';
+  if (tableName) where += ` AND table_name = '${esc(tableName)}'`;
+  if (recordId !== undefined) where += ` AND record_id = ${recordId}`;
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT * FROM sylvias_audit_log WHERE ${where} ORDER BY performed_at DESC, id DESC LIMIT ${limit}`
+  );
+  return rows as unknown as AuditEntry[];
+}
+
+export async function deleteSaleWithAudit(saleId: number, performedBy: string, reason: string): Promise<void> {
+  // Grab sale info for audit trail
+  const saleRows = await window.tasklet.sqlQuery(`SELECT * FROM sylvias_sales WHERE id = ${saleId}`);
+  if (!saleRows || saleRows.length === 0) return;
+  const sale = saleRows[0] as any;
+  const itemRows = await window.tasklet.sqlQuery(`SELECT * FROM sylvias_sale_items WHERE sale_id = ${saleId}`);
+  const items = (itemRows || []) as any[];
+  const payRows = await window.tasklet.sqlQuery(`SELECT * FROM sylvias_payments WHERE sale_id = ${saleId}`);
+  const payments = (payRows || []) as any[];
+
+  const details = JSON.stringify({
+    reason,
+    sale: { invoice: sale.invoice_number, total: sale.total, customer: sale.customer_name, method: sale.payment_method, date: sale.sale_date },
+    items: items.map((i: any) => ({ desc: i.description, qty: i.qty, price: i.unit_price })),
+    payments: payments.map((p: any) => ({ amount: p.amount, method: p.payment_method, date: p.payment_date })),
+  });
+
+  // Log audit before deleting
+  await logAudit('DELETE', 'sylvias_sales', saleId, details, performedBy);
+
+  // Delete related records
+  await window.tasklet.sqlExec(`DELETE FROM sylvias_payments WHERE sale_id = ${saleId}`);
+  await window.tasklet.sqlExec(`DELETE FROM sylvias_sale_items WHERE sale_id = ${saleId}`);
+  await window.tasklet.sqlExec(`DELETE FROM sylvias_sales WHERE id = ${saleId}`);
+
+  // Restore stock quantities for any stock items that were sold
+  for (const item of items) {
+    if (item.stock_id && item.stock_id > 0) {
+      await window.tasklet.sqlExec(`UPDATE sylvias_stock SET qty = qty + ${item.qty} WHERE id = ${item.stock_id}`);
+    }
+  }
+}
+
+export async function deleteExpenseWithAudit(expenseId: number, performedBy: string, reason: string): Promise<void> {
+  const rows = await window.tasklet.sqlQuery(`SELECT * FROM sylvias_expenses WHERE id = ${expenseId}`);
+  if (!rows || rows.length === 0) return;
+  const exp = rows[0] as any;
+
+  const details = JSON.stringify({
+    reason,
+    expense: { description: exp.description, amount: exp.amount, category: exp.category, date: exp.expense_date },
+  });
+
+  await logAudit('DELETE', 'sylvias_expenses', expenseId, details, performedBy);
+  await window.tasklet.sqlExec(`DELETE FROM sylvias_expenses WHERE id = ${expenseId}`);
+}
+
+export async function editSaleTotalWithAudit(saleId: number, newTotal: number, performedBy: string, reason: string): Promise<void> {
+  const saleRows = await window.tasklet.sqlQuery(`SELECT * FROM sylvias_sales WHERE id = ${saleId}`);
+  if (!saleRows || saleRows.length === 0) return;
+  const sale = saleRows[0] as any;
+
+  const details = JSON.stringify({
+    reason,
+    old_total: sale.total,
+    new_total: newTotal,
+    invoice: sale.invoice_number,
+  });
+
+  await logAudit('EDIT', 'sylvias_sales', saleId, details, performedBy);
+
+  // Update sale total and recalc payment status
+  const payRows = await window.tasklet.sqlQuery(`SELECT COALESCE(SUM(amount), 0) as total_paid FROM sylvias_payments WHERE sale_id = ${saleId}`);
+  const totalPaid = (payRows[0] as any).total_paid;
+  const balanceDue = Math.max(0, newTotal - totalPaid);
+  const status = balanceDue <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
+
+  await window.tasklet.sqlExec(
+    `UPDATE sylvias_sales SET total = ${newTotal}, amount_paid = ${totalPaid}, balance_due = ${balanceDue}, status = '${status}' WHERE id = ${saleId}`
+  );
 }

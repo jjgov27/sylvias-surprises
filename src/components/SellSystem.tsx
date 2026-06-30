@@ -30,6 +30,8 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
   const [saleType, setSaleType] = useState<'receipt' | 'invoice'>('receipt');
   const [dueDate, setDueDate] = useState('');
   const [partialAmount, setPartialAmount] = useState('');
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [printReceipt, setPrintReceipt] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -75,6 +77,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
     setShowCustomerPicker(false); setCustomerFieldFocused(false); setShowQuickAdd(false);
     setQuickAddForm({ salutation: '', first_name: '', surname: '', phone: '', email: '', address_line1: '', address_line2: '', address_line3: '', postcode: '' });
     setPaymentMethod('cash'); setSaleType('receipt'); setDueDate(''); setPartialAmount('');
+    setSaleDate(new Date().toISOString().split('T')[0]); setShowDatePicker(false);
     setShowConfirm(false); setPrintReceipt(true); setProcessing(false);
     setOverrideItemId(null); setOverrideInitials(''); setSaleNotes(''); setConsignmentResults([]);
     setCreditNoteEnabled(false); setCreditNoteSearch(''); setAppliedCreditNote(null); setCreditNoteError(''); setCreditNoteAmountToUse(''); setCustomerCreditNotes([]);
@@ -324,6 +327,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         status,
         sale_type: saleType,
         due_date: dueDate,
+        sale_date: saleDate + ' 12:00:00',
       });
 
       // Add sale items and deduct stock
@@ -351,7 +355,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
       if (tradeInEnabled && tradeInAmount > 0) {
         await addPayment({
           sale_id: saleId,
-          payment_date: new Date().toISOString().split('T')[0],
+          payment_date: saleDate,
           amount: tradeInAmount,
           payment_method: 'trade_in',
           notes: `Trade-in: ${tradeInDesc}`,
@@ -382,7 +386,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
           : `Credit Note ${appliedCreditNote.credit_note_number} applied (£${creditNoteAmount.toFixed(2)}) | Fully used`;
         await addPayment({
           sale_id: saleId,
-          payment_date: new Date().toISOString().split('T')[0],
+          payment_date: saleDate,
           amount: creditNoteAmount,
           payment_method: 'credit_note',
           notes: cnPaymentNotes,
@@ -398,7 +402,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
           : `Gift Voucher ${appliedGiftVoucher.voucher_number} redeemed (fully used)`;
         await addPayment({
           sale_id: saleId,
-          payment_date: new Date().toISOString().split('T')[0],
+          payment_date: saleDate,
           amount: giftVoucherAmount,
           payment_method: 'gift_voucher',
           notes: gvNotes,
@@ -416,7 +420,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
       if (cashPortion > 0) {
         await addPayment({
           sale_id: saleId,
-          payment_date: new Date().toISOString().split('T')[0],
+          payment_date: saleDate,
           amount: cashPortion,
           payment_method: paymentMethod,
           notes: saleType === 'invoice' ? 'Initial deposit at point of sale' : ((tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) ? 'Balance payment' : 'Payment at point of sale'),
@@ -736,6 +740,30 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                       </div>
                     )}
                   </div>
+                )}
+              </div>
+
+              {/* Sale Date — defaults to today, expandable to change */}
+              <div className="mt-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">Sale Date:</span>
+                  <span className="text-sm">{new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  {saleDate !== new Date().toISOString().split('T')[0] && (
+                    <span className="badge badge-warning badge-sm">Backdated</span>
+                  )}
+                  <button className="btn btn-ghost btn-xs" onClick={() => setShowDatePicker(!showDatePicker)}>
+                    📅 {showDatePicker ? 'Hide' : 'Change'}
+                  </button>
+                  {showDatePicker && saleDate !== new Date().toISOString().split('T')[0] && (
+                    <button className="btn btn-ghost btn-xs text-info" onClick={() => { setSaleDate(new Date().toISOString().split('T')[0]); setShowDatePicker(false); }}>
+                      Reset to Today
+                    </button>
+                  )}
+                </div>
+                {showDatePicker && (
+                  <input type="date" className="input input-bordered input-sm w-48 mt-1" value={saleDate}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={e => setSaleDate(e.target.value)} />
                 )}
               </div>
 
@@ -1313,6 +1341,9 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                   )}
                   <p className="text-warning font-semibold mt-1">Balance Due: £{(cartTotal - tradeInAmount - creditNoteAmount - giftVoucherAmount - (parseFloat(partialAmount) || 0)).toFixed(2)}</p>
                 </>
+              )}
+              {saleDate !== new Date().toISOString().split('T')[0] && (
+                <p className="text-warning font-semibold">⚠️ Backdated to: {new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p>
               )}
               <p className="text-xl font-bold text-primary mt-2">Total: £{cartTotal.toFixed(2)}</p>
             </div>
