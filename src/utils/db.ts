@@ -376,6 +376,18 @@ const INIT_TABLES = [
     performed_by TEXT NOT NULL DEFAULT '',
     performed_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  `CREATE TABLE IF NOT EXISTS sylvias_snags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    reported_by TEXT NOT NULL DEFAULT '',
+    priority TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'open',
+    resolution TEXT NOT NULL DEFAULT '',
+    user_response TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
 ];
 
 const ALTER_SQLS = [

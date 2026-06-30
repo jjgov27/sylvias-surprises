@@ -98,6 +98,7 @@ const INIT_TABLES = [
   "CREATE TABLE IF NOT EXISTS sylvias_email_recipients (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
   "CREATE TABLE IF NOT EXISTS sylvias_sent_emails (id INTEGER PRIMARY KEY AUTOINCREMENT, sent_at TEXT NOT NULL DEFAULT (datetime('now')), subject TEXT NOT NULL DEFAULT '', recipients TEXT NOT NULL DEFAULT '', body_preview TEXT NOT NULL DEFAULT '', sections_used TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'sent')",
   "CREATE TABLE IF NOT EXISTS sylvias_audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL, table_name TEXT NOT NULL, record_id INTEGER NOT NULL, details TEXT NOT NULL DEFAULT '', performed_by TEXT NOT NULL DEFAULT '', performed_at TEXT NOT NULL DEFAULT (datetime('now')))",
+  "CREATE TABLE IF NOT EXISTS sylvias_snags (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', reported_by TEXT NOT NULL DEFAULT '', priority TEXT NOT NULL DEFAULT 'medium', status TEXT NOT NULL DEFAULT 'open', resolution TEXT NOT NULL DEFAULT '', user_response TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))",
 ];
 
 const ALTER_SQLS = [
