@@ -581,6 +581,32 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         </div>
       </div>
 
+      {/* Sale Date — always visible */}
+      <div className="card bg-base-200 shadow mb-4">
+        <div className="card-body p-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold">📅 Sale Date:</span>
+            <span className="text-sm">{new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            {saleDate !== new Date().toISOString().split('T')[0] && (
+              <span className="badge badge-warning badge-sm">Backdated</span>
+            )}
+            <button className="btn btn-ghost btn-xs" onClick={() => setShowDatePicker(!showDatePicker)}>
+              {showDatePicker ? 'Hide' : 'Change'}
+            </button>
+            {showDatePicker && saleDate !== new Date().toISOString().split('T')[0] && (
+              <button className="btn btn-ghost btn-xs text-info" onClick={() => { setSaleDate(new Date().toISOString().split('T')[0]); setShowDatePicker(false); }}>
+                Reset to Today
+              </button>
+            )}
+          </div>
+          {showDatePicker && (
+            <input type="date" className="input input-bordered input-sm w-48 mt-1" value={saleDate}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={e => setSaleDate(e.target.value)} />
+          )}
+        </div>
+      </div>
+
       {/* Cart */}
       <div className="card bg-base-200 shadow mb-4">
         <div className="card-body p-4">
@@ -740,30 +766,6 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-
-              {/* Sale Date — defaults to today, expandable to change */}
-              <div className="mt-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">Sale Date:</span>
-                  <span className="text-sm">{new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                  {saleDate !== new Date().toISOString().split('T')[0] && (
-                    <span className="badge badge-warning badge-sm">Backdated</span>
-                  )}
-                  <button className="btn btn-ghost btn-xs" onClick={() => setShowDatePicker(!showDatePicker)}>
-                    📅 {showDatePicker ? 'Hide' : 'Change'}
-                  </button>
-                  {showDatePicker && saleDate !== new Date().toISOString().split('T')[0] && (
-                    <button className="btn btn-ghost btn-xs text-info" onClick={() => { setSaleDate(new Date().toISOString().split('T')[0]); setShowDatePicker(false); }}>
-                      Reset to Today
-                    </button>
-                  )}
-                </div>
-                {showDatePicker && (
-                  <input type="date" className="input input-bordered input-sm w-48 mt-1" value={saleDate}
-                    max={new Date().toISOString().split('T')[0]}
-                    onChange={e => setSaleDate(e.target.value)} />
                 )}
               </div>
 
