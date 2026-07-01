@@ -1022,7 +1022,7 @@ export async function getCogsByRange(from: string, to: string): Promise<number> 
 
 export async function getSalesByMonthInRange(from: string, to: string): Promise<{month: string; total: number; count: number}[]> {
   const rows = await window.tasklet.sqlQuery(
-    `SELECT strftime('%Y-%m', sale_date) as month, SUM(total) as total, COUNT(*) as count
+    `SELECT strftime('%Y-%m', sale_date) as month, SUM(total - discount) as total, COUNT(*) as count
      FROM sylvias_sales WHERE date(sale_date) >= '${esc(from)}' AND date(sale_date) <= '${esc(to)}'
      GROUP BY month ORDER BY month ASC`
   );

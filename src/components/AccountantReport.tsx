@@ -205,12 +205,14 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const priorStockSalesTotal = priorSplit?.stockSalesTotal || 0;
   const priorConsignmentCommission = priorSplit?.consignmentCommission || 0;
 
-  // Gross profit = Stock sales - COGS + Consignment commission
-  const stockGrossProfit = stockSalesTotal - cogs;
+  // Gross profit = (Stock sales - Discounts) - COGS + Consignment commission
+  const netStockRevenue = stockSalesTotal - discountInfo.totalDiscount;
+  const stockGrossProfit = netStockRevenue - cogs;
   const totalGrossProfit = stockGrossProfit + consignmentCommission;
   const netProfit = totalGrossProfit - expTotals.total_expenses;
 
-  const priorStockGrossProfit = priorStockSalesTotal - priorCogs;
+  const priorNetStockRevenue = priorStockSalesTotal - priorDiscountInfo.totalDiscount;
+  const priorStockGrossProfit = priorNetStockRevenue - priorCogs;
   const priorTotalGrossProfit = priorStockGrossProfit + priorConsignmentCommission;
   const priorNetProfit = priorTotalGrossProfit - priorExpTotals.total_expenses;
 
