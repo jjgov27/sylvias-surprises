@@ -843,11 +843,15 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                     </div>
                   </div>
                   {discountValue > 0 && (
-                    <div className="bg-secondary/20 rounded p-2 text-sm overflow-hidden">
-                      <div className="flex justify-between items-center gap-2 flex-nowrap"><span className="whitespace-nowrap">Cart Total:</span><span className="whitespace-nowrap font-mono">£{cartTotal.toFixed(2)}</span></div>
-                      <div className="flex justify-between items-center gap-2 flex-nowrap text-secondary font-bold"><span className="whitespace-nowrap">Discount:</span><span className="whitespace-nowrap font-mono">−£{discountValue.toFixed(2)}</span></div>
-                      <div className="divider my-1"></div>
-                      <div className="flex justify-between items-center gap-2 flex-nowrap font-bold text-base"><span className="whitespace-nowrap">After Discount:</span><span className="whitespace-nowrap font-mono">£{(cartTotal - discountValue).toFixed(2)}</span></div>
+                    <div className="bg-secondary/20 rounded p-2 text-sm" style={{overflow:'hidden'}}>
+                      <table style={{width:'100%',borderCollapse:'collapse'}}>
+                        <tbody>
+                          <tr><td style={{textAlign:'left',padding:'2px 0'}}>Cart Total:</td><td style={{textAlign:'right',padding:'2px 0',fontFamily:'monospace'}}>£{cartTotal.toFixed(2)}</td></tr>
+                          <tr className="text-secondary font-bold"><td style={{textAlign:'left',padding:'2px 0'}}>Discount:</td><td style={{textAlign:'right',padding:'2px 0',fontFamily:'monospace'}}>−£{discountValue.toFixed(2)}</td></tr>
+                          <tr><td colSpan={2}><div className="divider my-1"></div></td></tr>
+                          <tr className="font-bold text-base"><td style={{textAlign:'left',padding:'2px 0'}}>After Discount:</td><td style={{textAlign:'right',padding:'2px 0',fontFamily:'monospace'}}>£{(cartTotal - discountValue).toFixed(2)}</td></tr>
+                        </tbody>
+                      </table>
                     </div>
                   )}
                   {discountValue <= 0 && <p className="text-xs text-error">Please enter a discount amount</p>}
@@ -1014,7 +1018,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
               <div className="divider text-xs text-base-content/40 mt-4 mb-1">Optional Extras</div>
 
               {/* Trade-In */}
-              <div className="mt-1">
+              <div className="mt-3">
                 <label className="label cursor-pointer justify-start gap-2">
                   <input type="checkbox" className="toggle toggle-accent" checked={tradeInEnabled}
                     onChange={e => {
@@ -1227,11 +1231,11 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
               )}
 
               {/* Gift Voucher */}
-              <div className="form-control">
-                <label className="label py-1 cursor-pointer justify-start gap-2">
-                  <input type="checkbox" className="toggle toggle-warning toggle-sm" checked={giftVoucherEnabled}
+              <div className="mt-3">
+                <label className="label cursor-pointer justify-start gap-2">
+                  <input type="checkbox" className="toggle toggle-warning" checked={giftVoucherEnabled}
                     onChange={e => { setGiftVoucherEnabled(e.target.checked); if (!e.target.checked) removeGiftVoucher(); }} />
-                  <span className="label-text font-semibold flex items-center gap-1"><Gift size={14} /> Apply Gift Voucher</span>
+                  <span className="label-text font-semibold flex items-center gap-1"><Gift size={16} /> Apply Gift Voucher</span>
                 </label>
               </div>
 
