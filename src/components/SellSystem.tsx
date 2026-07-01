@@ -843,11 +843,11 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                     </div>
                   </div>
                   {discountValue > 0 && (
-                    <div className="bg-secondary/20 rounded p-2 text-sm">
-                      <div className="flex justify-between"><span>Cart Total:</span><span>£{cartTotal.toFixed(2)}</span></div>
-                      <div className="flex justify-between text-secondary font-bold"><span>Discount:</span><span>-£{discountValue.toFixed(2)}</span></div>
+                    <div className="bg-secondary/20 rounded p-2 text-sm overflow-hidden">
+                      <div className="flex justify-between items-center gap-2 flex-nowrap"><span className="whitespace-nowrap">Cart Total:</span><span className="whitespace-nowrap font-mono">£{cartTotal.toFixed(2)}</span></div>
+                      <div className="flex justify-between items-center gap-2 flex-nowrap text-secondary font-bold"><span className="whitespace-nowrap">Discount:</span><span className="whitespace-nowrap font-mono">−£{discountValue.toFixed(2)}</span></div>
                       <div className="divider my-1"></div>
-                      <div className="flex justify-between font-bold text-lg"><span>After Discount:</span><span>£{(cartTotal - discountValue).toFixed(2)}</span></div>
+                      <div className="flex justify-between items-center gap-2 flex-nowrap font-bold text-base"><span className="whitespace-nowrap">After Discount:</span><span className="whitespace-nowrap font-mono">£{(cartTotal - discountValue).toFixed(2)}</span></div>
                     </div>
                   )}
                   {discountValue <= 0 && <p className="text-xs text-error">Please enter a discount amount</p>}
