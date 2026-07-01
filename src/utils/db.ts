@@ -2223,6 +2223,24 @@ export async function getAllRefundsByMethodForDate(date: string): Promise<Record
   return result;
 }
 
+// ── Discount totals ──
+
+export async function getDiscountTotalForDate(date: string): Promise<{ totalDiscount: number; discountCount: number }> {
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(discount), 0) as total_discount, COUNT(*) as discount_count FROM sylvias_sales WHERE date(sale_date) = '${esc(date)}' AND discount > 0`
+  );
+  const r = (rows || [])[0] as any;
+  return { totalDiscount: Number(r?.total_discount) || 0, discountCount: Number(r?.discount_count) || 0 };
+}
+
+export async function getDiscountTotalForRange(from: string, to: string): Promise<{ totalDiscount: number; discountCount: number }> {
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(discount), 0) as total_discount, COUNT(*) as discount_count FROM sylvias_sales WHERE date(sale_date) >= date('${esc(from)}') AND date(sale_date) <= date('${esc(to)}') AND discount > 0`
+  );
+  const r = (rows || [])[0] as any;
+  return { totalDiscount: Number(r?.total_discount) || 0, discountCount: Number(r?.discount_count) || 0 };
+}
+
 // ── Invoice balance payments (from sylvias_payments) ──
 
 export async function getInvoicePaymentsByMethodForDate(date: string): Promise<Record<string, number>> {

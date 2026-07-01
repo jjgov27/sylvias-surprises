@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StaffUser, FloatRecord } from '../types';
-import { getFloatByDate, saveFloat, formatPaymentMethod, getStaffUsers, getAllSalesByMethodForDate, getAllExpensesByMethodForDate, getAllRefundsByMethodForDate, getCashSalesForDate, getCashRefundsForDate, getCashExpensesForDate } from '../utils/db';
+import { getFloatByDate, saveFloat, formatPaymentMethod, getStaffUsers, getAllSalesByMethodForDate, getAllExpensesByMethodForDate, getAllRefundsByMethodForDate, getCashSalesForDate, getCashRefundsForDate, getCashExpensesForDate, getDiscountTotalForDate } from '../utils/db';
 import { Calculator, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, User, Printer } from 'lucide-react';
 
 interface Props {
@@ -21,6 +21,8 @@ export function CashUp({ currentUser }: Props) {
   const [salesByMethod, setSalesByMethod] = useState<Record<string, number>>({});
   const [refundsByMethod, setRefundsByMethod] = useState<Record<string, number>>({});
   const [expensesByMethod, setExpensesByMethod] = useState<Record<string, number>>({});
+  const [discountTotal, setDiscountTotal] = useState(0);
+  const [discountCount, setDiscountCount] = useState(0);
   const [existingFloat, setExistingFloat] = useState<FloatRecord | null>(null);
   const [openingFloat, setOpeningFloat] = useState('');
   const [closingFloat, setClosingFloat] = useState('');
@@ -33,17 +35,20 @@ export function CashUp({ currentUser }: Props) {
     setLoading(true);
     setSaved(false);
     try {
-      const [sales, refunds, expenses, floatRec, users] = await Promise.all([
+      const [sales, refunds, expenses, floatRec, users, discInfo] = await Promise.all([
         getAllSalesByMethodForDate(date),
         getAllRefundsByMethodForDate(date),
         getAllExpensesByMethodForDate(date),
         getFloatByDate(date),
         getStaffUsers(),
+        getDiscountTotalForDate(date),
       ]);
       // getAllSalesByMethodForDate now queries sylvias_payments directly — single source of truth
       setSalesByMethod(sales);
       setRefundsByMethod(refunds);
       setExpensesByMethod(expenses);
+      setDiscountTotal(discInfo.totalDiscount);
+      setDiscountCount(discInfo.discountCount);
       setExistingFloat(floatRec);
       setStaffList(users);
       if (floatRec) {
@@ -220,6 +225,22 @@ export function CashUp({ currentUser }: Props) {
               )}
             </div>
           </div>
+
+          {/* Discounts Given */}
+          {discountTotal > 0 && (
+            <div className="card bg-base-200 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-lg flex items-center gap-2">🏷️ Discounts Given</h3>
+                  <div className="badge badge-secondary badge-lg font-bold text-lg">−£{discountTotal.toFixed(2)}</div>
+                </div>
+                <p className="text-sm text-base-content/60 mt-1">
+                  {discountCount} sale{discountCount !== 1 ? 's' : ''} had a discount today.
+                  Sale totals above are <strong>after</strong> discounts (actual money received).
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Non-Cash Method Summary Cards */}
           {(salesByMethod['sumup'] || salesByMethod['bank_transfer'] || salesByMethod['ebay'] || salesByMethod['trade_in']) ? (

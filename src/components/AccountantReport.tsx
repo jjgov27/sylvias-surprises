@@ -10,6 +10,7 @@ import {
   getExpensesByCategoryForPeriod,
   getSalesSplitByDateRange, SalesSplit,
   getSupplierInvoicesTotals,
+  getDiscountTotalForRange,
 } from '../utils/db';
 import { BarChart3, TrendingUp, TrendingDown, Package, PoundSterling, Download, Calendar, FileText, Printer } from 'lucide-react';
 
@@ -99,6 +100,10 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const [split, setSplit] = useState<SalesSplit | null>(null);
   const [priorSplit, setPriorSplit] = useState<SalesSplit | null>(null);
 
+  // Discount data
+  const [discountInfo, setDiscountInfo] = useState({ totalDiscount: 0, discountCount: 0 });
+  const [priorDiscountInfo, setPriorDiscountInfo] = useState({ totalDiscount: 0, discountCount: 0 });
+
   // Prior period data
   const [priorSalesTotals, setPriorSalesTotals] = useState({ total_sales: 0, sale_count: 0 });
   const [priorExpTotals, setPriorExpTotals] = useState({ total_expenses: 0, expense_count: 0 });
@@ -127,8 +132,8 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
     if (range) {
       const prior = getPriorYearRange(range.from, range.to);
 
-      const [st, et, cg, ec, em, sm, sp, splitData,
-             pst, pet, pcg, pec, psp, priorSplitData] = await Promise.all([
+      const [st, et, cg, ec, em, sm, sp, splitData, discData,
+             pst, pet, pcg, pec, psp, priorSplitData, pDiscData] = await Promise.all([
         getSalesTotalsByRange(range.from, range.to),
         getExpensesTotalsByRange(range.from, range.to),
         getCogsByRange(range.from, range.to),
@@ -137,6 +142,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         getSalesByMonthInRange(range.from, range.to),
         getSalesByPaymentMethodInRange(range.from, range.to),
         getSalesSplitByDateRange(range.from, range.to),
+        getDiscountTotalForRange(range.from, range.to),
         // Prior year
         getSalesTotalsByRange(prior.from, prior.to),
         getExpensesTotalsByRange(prior.from, prior.to),
@@ -144,13 +150,15 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         getExpensesByCategoryForPeriod(prior.from, prior.to),
         getSalesByPaymentMethodInRange(prior.from, prior.to),
         getSalesSplitByDateRange(prior.from, prior.to),
+        getDiscountTotalForRange(prior.from, prior.to),
       ]);
 
       setSalesTotals(st); setExpTotals(et); setCogs(cg);
       setExpByCat(ec); setExpByMonth(em); setSalesByMonth(sm); setSalesByPM(sp);
-      setSplit(splitData);
+      setSplit(splitData); setDiscountInfo(discData);
       setPriorSalesTotals(pst); setPriorExpTotals(pet); setPriorCogs(pcg);
       setPriorExpByCat(pec); setPriorSalesByPM(psp); setPriorSplit(priorSplitData);
+      setPriorDiscountInfo(pDiscData);
 
       const fromLabel = formatDateLong(range.from);
       const toLabel = formatDateLong(range.to);
@@ -160,18 +168,19 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
       const priorToLabel = formatDateLong(prior.to);
       setPriorLabel(`${priorFromLabel} — ${priorToLabel}`);
     } else {
-      const [st, et, cg, ec, sm, sp, splitData] = await Promise.all([
+      const [st, et, cg, ec, sm, sp, splitData, discData] = await Promise.all([
         getSalesTotals(), getExpensesTotals(), getCostOfGoodsSold(),
         getExpensesByCategory(), getSalesByMonth(), getSalesByPaymentMethod(),
         getSalesSplitByDateRange('2000-01-01', '2099-12-31'),
+        getDiscountTotalForRange('2000-01-01', '2099-12-31'),
       ]);
       setSalesTotals(st); setExpTotals(et); setCogs(cg); setExpByCat(ec);
       setExpByMonth([]); setSalesByMonth(sm); setSalesByPM(sp);
-      setSplit(splitData);
+      setSplit(splitData); setDiscountInfo(discData);
       setPriorSalesTotals({ total_sales: 0, sale_count: 0 });
       setPriorExpTotals({ total_expenses: 0, expense_count: 0 });
       setPriorCogs(0); setPriorExpByCat({}); setPriorSalesByPM([]);
-      setPriorSplit(null);
+      setPriorSplit(null); setPriorDiscountInfo({ totalDiscount: 0, discountCount: 0 });
       setDateLabel('All Time'); setPriorLabel('');
     }
 
@@ -257,6 +266,12 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
           })),
           currentTotal: expTotals.total_expenses,
           priorTotal: priorExpTotals.total_expenses,
+        },
+        discounts: {
+          current: discountInfo.totalDiscount,
+          currentCount: discountInfo.discountCount,
+          prior: priorDiscountInfo.totalDiscount,
+          priorCount: priorDiscountInfo.discountCount,
         },
         cogs: { current: cogs, prior: priorCogs },
         grossProfit: { current: totalGrossProfit, prior: priorTotalGrossProfit },
@@ -430,10 +445,24 @@ for m in inc['byMethod']:
     if has_prior: row.append(pounds(prior_val))
     ie_rows.append(row)
 
-stock_total_row = ['Total Stock Sales', pounds(inc['stockSales'])]
+stock_total_row = ['Total Stock Sales (Gross)', pounds(inc['stockSales'])]
 if has_prior: stock_total_row.append(pounds(pinc['stockSales']))
 ie_rows.append(stock_total_row)
 stock_total_idx = len(ie_rows) - 1
+
+# Discounts
+disc = data.get('discounts', {})
+disc_current = disc.get('current', 0)
+disc_prior = disc.get('prior', 0)
+disc_count = disc.get('currentCount', 0)
+if disc_current > 0:
+    disc_label = f'  Less: Discounts Given ({disc_count} sale{"s" if disc_count != 1 else ""})'
+    disc_row = [disc_label, f'-{pounds(disc_current)}']
+    if has_prior: disc_row.append(f'-{pounds(disc_prior)}' if disc_prior > 0 else '-')
+    ie_rows.append(disc_row)
+    net_rev_row = ['  Net Sales Revenue', pounds(inc['stockSales'] - disc_current)]
+    if has_prior: net_rev_row.append(pounds(pinc['stockSales'] - disc_prior))
+    ie_rows.append(net_rev_row)
 
 # Blank
 ie_rows.append(['', ''] if not has_prior else ['', '', ''])
@@ -735,10 +764,24 @@ print('OK')
                 );
               })}
               <tr className="font-bold bg-base-300">
-                <td>Total Stock Sales</td>
+                <td>Total Stock Sales (Gross)</td>
                 <td className="text-right text-blue-700">{fmt(stockSalesTotal)}</td>
                 {priorLabel && <td className="text-right">{fmt(priorStockSalesTotal)}</td>}
               </tr>
+              {discountInfo.totalDiscount > 0 && (
+                <tr className="text-secondary">
+                  <td className="pl-6">Less: Discounts Given ({discountInfo.discountCount} sale{discountInfo.discountCount !== 1 ? 's' : ''})</td>
+                  <td className="text-right">−{fmt(discountInfo.totalDiscount)}</td>
+                  {priorLabel && <td className="text-right">{priorDiscountInfo.totalDiscount > 0 ? `−${fmt(priorDiscountInfo.totalDiscount)}` : '—'}</td>}
+                </tr>
+              )}
+              {discountInfo.totalDiscount > 0 && (
+                <tr className="font-semibold">
+                  <td className="pl-6">Net Sales Revenue</td>
+                  <td className="text-right">{fmt(stockSalesTotal - discountInfo.totalDiscount)}</td>
+                  {priorLabel && <td className="text-right">{fmt(priorStockSalesTotal - priorDiscountInfo.totalDiscount)}</td>}
+                </tr>
+              )}
               <tr><td colSpan={priorLabel ? 3 : 2}></td></tr>
 
               {/* COGS */}
