@@ -1919,9 +1919,10 @@ export async function addPayment(p: { sale_id: number; payment_date: string; amo
     `SELECT COALESCE(SUM(amount), 0) as total_paid FROM sylvias_payments WHERE sale_id = ${p.sale_id}`
   );
   const totalPaid = (paymentRows[0] as any).total_paid;
-  const saleRows = await window.tasklet.sqlQuery(`SELECT total FROM sylvias_sales WHERE id = ${p.sale_id}`);
+  const saleRows = await window.tasklet.sqlQuery(`SELECT total, discount FROM sylvias_sales WHERE id = ${p.sale_id}`);
   const saleTotal = (saleRows[0] as any).total;
-  const balanceDue = Math.max(0, saleTotal - totalPaid);
+  const saleDiscount = (saleRows[0] as any).discount || 0;
+  const balanceDue = Math.max(0, saleTotal - saleDiscount - totalPaid);
   const status = balanceDue <= 0 ? 'paid' : 'partial';
   await window.tasklet.sqlExec(
     `UPDATE sylvias_sales SET amount_paid = ${totalPaid}, balance_due = ${balanceDue}, status = '${status}' WHERE id = ${p.sale_id}`
@@ -3065,7 +3066,9 @@ export async function editSaleTotalWithAudit(saleId: number, newTotal: number, p
   // Update sale total and recalc payment status
   const payRows = await window.tasklet.sqlQuery(`SELECT COALESCE(SUM(amount), 0) as total_paid FROM sylvias_payments WHERE sale_id = ${saleId}`);
   const totalPaid = (payRows[0] as any).total_paid;
-  const balanceDue = Math.max(0, newTotal - totalPaid);
+  const discRows = await window.tasklet.sqlQuery(`SELECT discount FROM sylvias_sales WHERE id = ${saleId}`);
+  const saleDiscount = (discRows[0] as any).discount || 0;
+  const balanceDue = Math.max(0, newTotal - saleDiscount - totalPaid);
   const status = balanceDue <= 0 ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
 
   await window.tasklet.sqlExec(
