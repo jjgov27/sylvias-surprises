@@ -807,6 +807,53 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                 </div>
               )}
 
+              {/* Discount toggle — positioned right below payment method */}
+              <div className="mt-3">
+                <label className="label cursor-pointer justify-start gap-2">
+                  <input type="checkbox" className="toggle toggle-secondary" checked={discountEnabled}
+                    onChange={e => {
+                      setDiscountEnabled(e.target.checked);
+                      if (!e.target.checked) setDiscountAmount('');
+                    }} />
+                  <span className="label-text font-semibold flex items-center gap-1">
+                    🏷️ Discount
+                  </span>
+                </label>
+              </div>
+
+              {discountEnabled && (
+                <div className="mt-2 p-3 bg-secondary/10 border border-secondary/30 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2 text-secondary font-semibold text-sm">🏷️ Sale Discount</div>
+                  <div className="form-control">
+                    <label className="label py-1"><span className="label-text text-sm">Discount Amount (£)</span></label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold">£</span>
+                      <input type="text" className="input input-bordered input-sm w-32"
+                        value={discountAmount}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
+                            let v = parseFloat(val) || 0;
+                            if (v > cartTotal) v = cartTotal;
+                            setDiscountAmount(v > 0 ? (val.endsWith('.') || val.endsWith('.0') || val.endsWith('.00') ? val : String(v)) : val);
+                          }
+                        }}
+                        placeholder="0.00" />
+                      <span className="text-sm text-base-content/50">of £{cartTotal.toFixed(2)} total</span>
+                    </div>
+                  </div>
+                  {discountValue > 0 && (
+                    <div className="bg-secondary/20 rounded p-2 text-sm">
+                      <div className="flex justify-between"><span>Cart Total:</span><span>£{cartTotal.toFixed(2)}</span></div>
+                      <div className="flex justify-between text-secondary font-bold"><span>Discount:</span><span>-£{discountValue.toFixed(2)}</span></div>
+                      <div className="divider my-1"></div>
+                      <div className="flex justify-between font-bold text-lg"><span>After Discount:</span><span>£{(cartTotal - discountValue).toFixed(2)}</span></div>
+                    </div>
+                  )}
+                  {discountValue <= 0 && <p className="text-xs text-error">Please enter a discount amount</p>}
+                </div>
+              )}
+
               {/* Three clear sale action buttons */}
               <div className="mt-4 flex gap-2 flex-wrap">
                 <button
@@ -965,53 +1012,6 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
 
               {/* Optional extras - collapsible section */}
               <div className="divider text-xs text-base-content/40 mt-4 mb-1">Optional Extras</div>
-
-              {/* Discount */}
-              <div className="mt-1">
-                <label className="label cursor-pointer justify-start gap-2">
-                  <input type="checkbox" className="toggle toggle-secondary" checked={discountEnabled}
-                    onChange={e => {
-                      setDiscountEnabled(e.target.checked);
-                      if (!e.target.checked) setDiscountAmount('');
-                    }} />
-                  <span className="label-text font-semibold flex items-center gap-1">
-                    🏷️ Discount
-                  </span>
-                </label>
-              </div>
-
-              {discountEnabled && (
-                <div className="mt-2 p-3 bg-secondary/10 border border-secondary/30 rounded-lg space-y-3">
-                  <div className="flex items-center gap-2 text-secondary font-semibold text-sm">🏷️ Sale Discount</div>
-                  <div className="form-control">
-                    <label className="label py-1"><span className="label-text text-sm">Discount Amount (£)</span></label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-bold">£</span>
-                      <input type="text" className="input input-bordered input-sm w-32"
-                        value={discountAmount}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
-                            let v = parseFloat(val) || 0;
-                            if (v > cartTotal) v = cartTotal;
-                            setDiscountAmount(v > 0 ? (val.endsWith('.') || val.endsWith('.0') || val.endsWith('.00') ? val : String(v)) : val);
-                          }
-                        }}
-                        placeholder="0.00" />
-                      <span className="text-sm text-base-content/50">of £{cartTotal.toFixed(2)} total</span>
-                    </div>
-                  </div>
-                  {discountValue > 0 && (
-                    <div className="bg-secondary/20 rounded p-2 text-sm">
-                      <div className="flex justify-between"><span>Cart Total:</span><span>£{cartTotal.toFixed(2)}</span></div>
-                      <div className="flex justify-between text-secondary font-bold"><span>Discount:</span><span>-£{discountValue.toFixed(2)}</span></div>
-                      <div className="divider my-1"></div>
-                      <div className="flex justify-between font-bold text-lg"><span>After Discount:</span><span>£{(cartTotal - discountValue).toFixed(2)}</span></div>
-                    </div>
-                  )}
-                  {discountValue <= 0 && <p className="text-xs text-error">Please enter a discount amount</p>}
-                </div>
-              )}
 
               {/* Trade-In */}
               <div className="mt-1">
