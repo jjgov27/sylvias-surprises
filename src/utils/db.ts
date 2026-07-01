@@ -608,15 +608,21 @@ export async function getLearnedItemNames(): Promise<string[]> {
 // ── Sales ──
 
 export async function generateInvoiceNumber(): Promise<string> {
-  const rows = await window.tasklet.sqlQuery(
-    `SELECT COUNT(*) as cnt FROM sylvias_sales`
-  );
-  const count = (rows[0] as unknown as { cnt: number }).cnt;
   const now = new Date();
   const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const num = String(count + 1).padStart(4, '0');
-  return `SS-${yy}${mm}-${num}`;
+  const prefix = `SS-${yy}${mm}-`;
+  // Find the highest existing invoice number for this month
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT invoice_number FROM sylvias_sales WHERE invoice_number LIKE '${prefix}%' ORDER BY invoice_number DESC LIMIT 1`
+  );
+  let nextNum = 1;
+  if (rows.length > 0) {
+    const last = (rows[0] as unknown as { invoice_number: string }).invoice_number;
+    const lastNum = parseInt(last.replace(prefix, ''), 10);
+    if (!isNaN(lastNum)) nextNum = lastNum + 1;
+  }
+  return `${prefix}${String(nextNum).padStart(4, '0')}`;
 }
 
 export async function createSale(sale: {

@@ -286,9 +286,11 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
   async function completeSale(printInvoice: boolean) {
     setProcessing(true);
     try {
+      // Safety: recalculate total from cart to prevent stale-state mismatches
+      const verifiedTotal = cart.reduce((sum, c) => sum + (c.unitPrice * c.sellQty), 0);
       const invoiceNum = await generateInvoiceNumber();
       // Determine payment amounts
-      let amountPaid = cartTotal;
+      let amountPaid = verifiedTotal;
       let balanceDue = 0;
       let status = 'paid';
 
@@ -297,14 +299,14 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         const partial = partialAmount ? parseFloat(partialAmount) : 0;
         const totalDeposit = partial + tradeInAmount + creditNoteAmount + giftVoucherAmount;
         amountPaid = totalDeposit;
-        balanceDue = cartTotal - totalDeposit;
-        status = totalDeposit > 0 ? (totalDeposit >= cartTotal ? 'paid' : 'partial') : 'unpaid';
+        balanceDue = verifiedTotal - totalDeposit;
+        status = totalDeposit > 0 ? (totalDeposit >= verifiedTotal ? 'paid' : 'partial') : 'unpaid';
       }
 
-      // For pay-now sales, the full cartTotal is paid (trade-in + credit note + gift voucher count as payment)
+      // For pay-now sales, the full verifiedTotal is paid (trade-in + credit note + gift voucher count as payment)
       const totalCredits = tradeInAmount + creditNoteAmount + giftVoucherAmount;
-      const primaryMethod = totalCredits >= cartTotal
-        ? (giftVoucherAmount >= cartTotal ? 'gift_voucher' : creditNoteAmount >= cartTotal ? 'credit_note' : 'trade_in')
+      const primaryMethod = totalCredits >= verifiedTotal
+        ? (giftVoucherAmount >= verifiedTotal ? 'gift_voucher' : creditNoteAmount >= verifiedTotal ? 'credit_note' : 'trade_in')
         : (saleType === 'invoice' && amountPaid === 0 ? 'account' : paymentMethod);
 
       const saleId = await createSale({
@@ -313,7 +315,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
           : customerName,
         customer_id: selectedCustomer ? selectedCustomer.id : null,
         payment_method: primaryMethod,
-        total: cartTotal,
+        total: verifiedTotal,
         sold_by: currentUser.initials,
         invoice_number: invoiceNum,
         notes: [
@@ -339,7 +341,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
           description: c.stock.description,
           qty: c.sellQty,
           unit_price: c.unitPrice,
-          line_total: c.lineTotal,
+          line_total: c.unitPrice * c.sellQty,
           is_consignment: c.isConsignment ? 1 : 0,
           consignment_item_id: c.consignmentItemId || null,
         });
@@ -581,17 +583,20 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         </div>
       </div>
 
-      {/* Sale Date — always visible */}
-      <div className="card bg-base-200 shadow mb-4">
+      {/* DATE PICKER V3 */}
+      <div style={{background:'#ff0000',color:'#fff',padding:'20px',marginBottom:'10px',fontSize:'24px',fontWeight:'bold'}}>
+        🔴 SALE DATE TEST — If you see this, the code is fresh!
+      </div>
+      <div className="card bg-base-100 border border-primary/30 shadow mb-4">
         <div className="card-body p-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold">📅 Sale Date:</span>
-            <span className="text-sm">{new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-semibold flex items-center gap-1">📅 Sale Date:</span>
+            <span className="font-medium">{new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
             {saleDate !== new Date().toISOString().split('T')[0] && (
-              <span className="badge badge-warning badge-sm">Backdated</span>
+              <span className="badge badge-warning">Backdated</span>
             )}
-            <button className="btn btn-ghost btn-xs" onClick={() => setShowDatePicker(!showDatePicker)}>
-              {showDatePicker ? 'Hide' : 'Change'}
+            <button className="btn btn-outline btn-primary btn-xs" onClick={() => setShowDatePicker(!showDatePicker)}>
+              {showDatePicker ? 'Hide' : '📅 Change Date'}
             </button>
             {showDatePicker && saleDate !== new Date().toISOString().split('T')[0] && (
               <button className="btn btn-ghost btn-xs text-info" onClick={() => { setSaleDate(new Date().toISOString().split('T')[0]); setShowDatePicker(false); }}>
@@ -600,7 +605,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
             )}
           </div>
           {showDatePicker && (
-            <input type="date" className="input input-bordered input-sm w-48 mt-1" value={saleDate}
+            <input type="date" className="input input-bordered input-sm w-48 mt-2" value={saleDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={e => setSaleDate(e.target.value)} />
           )}
