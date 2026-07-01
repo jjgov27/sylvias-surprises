@@ -833,9 +833,12 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                         onChange={e => {
                           const val = e.target.value;
                           if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
-                            let v = parseFloat(val) || 0;
-                            if (v > cartTotal) v = cartTotal;
-                            setDiscountAmount(v > 0 ? (val.endsWith('.') || val.endsWith('.0') || val.endsWith('.00') ? val : String(v)) : val);
+                            const v = parseFloat(val) || 0;
+                            if (v > cartTotal) {
+                              setDiscountAmount(cartTotal.toFixed(2));
+                            } else {
+                              setDiscountAmount(val);
+                            }
                           }
                         }}
                         placeholder="0.00" />
