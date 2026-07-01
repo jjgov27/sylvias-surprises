@@ -943,7 +943,7 @@ export async function getSalesWithItems(saleId: number): Promise<{sale: Sale; it
 
 export async function getSalesTotals(): Promise<{total_sales: number; sale_count: number}> {
   const rows = await window.tasklet.sqlQuery(
-    `SELECT COALESCE(SUM(total), 0) as total_sales, COUNT(*) as sale_count FROM sylvias_sales`
+    `SELECT COALESCE(SUM(total - discount), 0) as total_sales, COUNT(*) as sale_count FROM sylvias_sales`
   );
   return rows[0] as unknown as {total_sales: number; sale_count: number};
 }
@@ -971,7 +971,7 @@ export async function getExpensesByCategory(): Promise<{category: string; total:
 
 export async function getSalesByMonth(): Promise<{month: string; total: number; count: number}[]> {
   const rows = await window.tasklet.sqlQuery(
-    `SELECT strftime('%Y-%m', sale_date) as month, SUM(total) as total, COUNT(*) as count FROM sylvias_sales GROUP BY month ORDER BY month DESC`
+    `SELECT strftime('%Y-%m', sale_date) as month, SUM(total - discount) as total, COUNT(*) as count FROM sylvias_sales GROUP BY month ORDER BY month DESC`
   );
   return rows as unknown as {month: string; total: number; count: number}[];
 }
@@ -1527,8 +1527,16 @@ export async function getSalesSplitByDateRange(from: string, to: string): Promis
   );
   const commission = (commRows[0] as unknown as { commission: number }).commission;
 
+  // Sale-level discounts reduce stock sales (shop eats the discount, not consigners)
+  const discRows = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(discount), 0) as total_discount
+     FROM sylvias_sales
+     WHERE date(sale_date) >= '${esc(from)}' AND date(sale_date) <= '${esc(to)}' AND discount > 0`
+  );
+  const totalDiscount = (discRows[0] as unknown as { total_discount: number }).total_discount;
+
   return {
-    stockSalesTotal: st.total,
+    stockSalesTotal: st.total - totalDiscount,
     stockSalesCount: st.cnt,
     consignmentSalesTotal: ct.total,
     consignmentSalesCount: ct.cnt,
@@ -1629,7 +1637,7 @@ export async function getDailySummary(date: string): Promise<{
   stockSalesTotal: number; consignmentSalesTotal: number; consignmentCommission: number; consignmentOwed: number;
 }> {
   const salesRows = await window.tasklet.sqlQuery(
-    `SELECT COUNT(*) as cnt, COALESCE(SUM(total), 0) as total FROM sylvias_sales WHERE date(sale_date) = '${esc(date)}'`
+    `SELECT COUNT(*) as cnt, COALESCE(SUM(total - discount), 0) as total FROM sylvias_sales WHERE date(sale_date) = '${esc(date)}'`
   );
   const s = salesRows[0] as unknown as {cnt: number; total: number};
 

@@ -130,10 +130,10 @@ export const SalesLedger: React.FC<Props> = ({ currentUser, onViewInvoice }) => 
     }
   }
 
-  const totalRevenue = sales.reduce((sum, s) => sum + s.total, 0);
+  const totalRevenue = sales.reduce((sum, s) => sum + s.total - (s.discount || 0), 0);
   const totalDiscounts = sales.reduce((sum, s) => sum + (s.discount || 0), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const netTotal = totalRevenue - totalDiscounts - totalExpenses;
+  const netTotal = totalRevenue - totalExpenses;
 
   // Build combined ledger entries grouped by date
   const byDate: Record<string, LedgerEntry[]> = {};
@@ -175,7 +175,7 @@ export const SalesLedger: React.FC<Props> = ({ currentUser, onViewInvoice }) => 
         sales.forEach(s => data.entries.push({
           date: s.sale_date.slice(0, 10), type: 'Sale',
           details: `${s.invoice_number || '-'} — ${s.customer_name}`,
-          category: s.payment_method, by: s.sold_by, amount: s.total,
+          category: s.payment_method, by: s.sold_by, amount: s.total - (s.discount || 0),
         }));
       }
       if (viewFilter !== 'sales' && viewFilter !== 'consignment') {
@@ -318,7 +318,7 @@ print('OK')
         <div className="stat bg-base-200 rounded-lg p-3">
           <div className="stat-title text-xs">Total Sales</div>
           <div className="stat-value text-base text-success">{fmt(totalRevenue)}</div>
-          {totalDiscounts > 0 && <div className="stat-desc text-secondary">Discounts: -{fmt(totalDiscounts)}</div>}
+          {totalDiscounts > 0 && <div className="stat-desc text-secondary">Includes {fmt(totalDiscounts)} discounts</div>}
           <div className="stat-desc text-xs">{sales.length} transactions</div>
         </div>
         <div className="stat bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -469,7 +469,7 @@ print('OK')
         <div className="text-center py-8 text-base-content/50">No entries found for this period</div>
       ) : (
         Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0])).map(([date, entries]) => {
-          const dayIncome = entries.filter(e => e.type === 'sale').reduce((s, e) => s + (e.data as Sale).total, 0);
+          const dayIncome = entries.filter(e => e.type === 'sale').reduce((s, e) => { const sale = e.data as Sale; return s + sale.total - (sale.discount || 0); }, 0);
           const dayExpense = entries.filter(e => e.type === 'expense').reduce((s, e) => s + (e.data as Expense).amount, 0);
           return (
             <div key={date} className="mb-4">
