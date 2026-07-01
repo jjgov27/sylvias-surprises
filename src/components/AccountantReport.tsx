@@ -205,14 +205,12 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const priorStockSalesTotal = priorSplit?.stockSalesTotal || 0;
   const priorConsignmentCommission = priorSplit?.consignmentCommission || 0;
 
-  // Gross profit = (Stock sales - Discounts) - COGS + Consignment commission
-  const netStockRevenue = stockSalesTotal - discountInfo.totalDiscount;
-  const stockGrossProfit = netStockRevenue - cogs;
+  // Gross profit = Stock sales (already net of discounts) - COGS + Consignment commission
+  const stockGrossProfit = stockSalesTotal - cogs;
   const totalGrossProfit = stockGrossProfit + consignmentCommission;
   const netProfit = totalGrossProfit - expTotals.total_expenses;
 
-  const priorNetStockRevenue = priorStockSalesTotal - priorDiscountInfo.totalDiscount;
-  const priorStockGrossProfit = priorNetStockRevenue - priorCogs;
+  const priorStockGrossProfit = priorStockSalesTotal - priorCogs;
   const priorTotalGrossProfit = priorStockGrossProfit + priorConsignmentCommission;
   const priorNetProfit = priorTotalGrossProfit - priorExpTotals.total_expenses;
 
@@ -447,24 +445,20 @@ for m in inc['byMethod']:
     if has_prior: row.append(pounds(prior_val))
     ie_rows.append(row)
 
-stock_total_row = ['Total Stock Sales (Gross)', pounds(inc['stockSales'])]
+stock_total_row = ['Total Stock Sales', pounds(inc['stockSales'])]
 if has_prior: stock_total_row.append(pounds(pinc['stockSales']))
 ie_rows.append(stock_total_row)
 stock_total_idx = len(ie_rows) - 1
 
-# Discounts
+# Discounts — informational note only (revenue already net of discounts)
 disc = data.get('discounts', {})
 disc_current = disc.get('current', 0)
-disc_prior = disc.get('prior', 0)
 disc_count = disc.get('currentCount', 0)
 if disc_current > 0:
-    disc_label = f'  Less: Discounts Given ({disc_count} sale{"s" if disc_count != 1 else ""})'
-    disc_row = [disc_label, f'-{pounds(disc_current)}']
-    if has_prior: disc_row.append(f'-{pounds(disc_prior)}' if disc_prior > 0 else '-')
+    disc_note = f'  (Includes {disc_count} discounted sale{"s" if disc_count != 1 else ""}, total discounts: {pounds(disc_current)})'
+    disc_row = [disc_note, '']
+    if has_prior: disc_row.append('')
     ie_rows.append(disc_row)
-    net_rev_row = ['  Net Sales Revenue', pounds(inc['stockSales'] - disc_current)]
-    if has_prior: net_rev_row.append(pounds(pinc['stockSales'] - disc_prior))
-    ie_rows.append(net_rev_row)
 
 # Blank
 ie_rows.append(['', ''] if not has_prior else ['', '', ''])
@@ -766,22 +760,15 @@ print('OK')
                 );
               })}
               <tr className="font-bold bg-base-300">
-                <td>Total Stock Sales (Gross)</td>
+                <td>Total Stock Sales</td>
                 <td className="text-right text-blue-700">{fmt(stockSalesTotal)}</td>
                 {priorLabel && <td className="text-right">{fmt(priorStockSalesTotal)}</td>}
               </tr>
               {discountInfo.totalDiscount > 0 && (
-                <tr className="text-secondary">
-                  <td className="pl-6">Less: Discounts Given ({discountInfo.discountCount} sale{discountInfo.discountCount !== 1 ? 's' : ''})</td>
-                  <td className="text-right">−{fmt(discountInfo.totalDiscount)}</td>
-                  {priorLabel && <td className="text-right">{priorDiscountInfo.totalDiscount > 0 ? `−${fmt(priorDiscountInfo.totalDiscount)}` : '—'}</td>}
-                </tr>
-              )}
-              {discountInfo.totalDiscount > 0 && (
-                <tr className="font-semibold">
-                  <td className="pl-6">Net Sales Revenue</td>
-                  <td className="text-right">{fmt(stockSalesTotal - discountInfo.totalDiscount)}</td>
-                  {priorLabel && <td className="text-right">{fmt(priorStockSalesTotal - priorDiscountInfo.totalDiscount)}</td>}
+                <tr className="text-gray-500 text-sm">
+                  <td className="pl-6 italic">Includes {discountInfo.discountCount} discounted sale{discountInfo.discountCount !== 1 ? 's' : ''} (total discounts: {fmt(discountInfo.totalDiscount)})</td>
+                  <td></td>
+                  {priorLabel && <td></td>}
                 </tr>
               )}
               <tr><td colSpan={priorLabel ? 3 : 2}></td></tr>

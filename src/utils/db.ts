@@ -997,7 +997,7 @@ export async function getCostOfGoodsSold(): Promise<number> {
 
 export async function getSalesTotalsByRange(from: string, to: string): Promise<{total_sales: number; sale_count: number}> {
   const rows = await window.tasklet.sqlQuery(
-    `SELECT COALESCE(SUM(total), 0) as total_sales, COUNT(*) as sale_count FROM sylvias_sales WHERE date(sale_date) >= '${esc(from)}' AND date(sale_date) <= '${esc(to)}'`
+    `SELECT COALESCE(SUM(total - discount), 0) as total_sales, COUNT(*) as sale_count FROM sylvias_sales WHERE date(sale_date) >= '${esc(from)}' AND date(sale_date) <= '${esc(to)}'`
   );
   return rows[0] as unknown as {total_sales: number; sale_count: number};
 }
