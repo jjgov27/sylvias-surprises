@@ -40,6 +40,10 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
   const [saleNotes, setSaleNotes] = useState('');
   const [consignmentResults, setConsignmentResults] = useState<ConsignmentItem[]>([]);
 
+  // Discount state
+  const [discountAmount, setDiscountAmount] = useState('');
+  const [discountEnabled, setDiscountEnabled] = useState(false);
+
   // Credit note state
   const [creditNoteEnabled, setCreditNoteEnabled] = useState(false);
   const [creditNoteSearch, setCreditNoteSearch] = useState('');
@@ -80,6 +84,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
     setSaleDate(new Date().toISOString().split('T')[0]); setShowDatePicker(false);
     setShowConfirm(false); setPrintReceipt(true); setProcessing(false);
     setOverrideItemId(null); setOverrideInitials(''); setSaleNotes(''); setConsignmentResults([]);
+    setDiscountEnabled(false); setDiscountAmount('');
     setCreditNoteEnabled(false); setCreditNoteSearch(''); setAppliedCreditNote(null); setCreditNoteError(''); setCreditNoteAmountToUse(''); setCustomerCreditNotes([]);
     setGiftVoucherEnabled(false); setGiftVoucherSearch(''); setAppliedGiftVoucher(null); setGiftVoucherError(''); setGiftVoucherAmountToUse('');
     setTradeInEnabled(false); setTradeInDesc(''); setTradeInCategory('Other'); setTradeInValue(''); setTradeInRrp(''); setTradeInLocation('Back Room'); setTradeInNotes('');
@@ -278,19 +283,22 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
   }
 
   const cartTotal = cart.reduce((sum, c) => sum + c.lineTotal, 0);
+  const discountValue = discountEnabled ? (parseFloat(discountAmount) || 0) : 0;
   const tradeInAmount = tradeInEnabled ? (parseFloat(tradeInValue) || 0) : 0;
   const creditNoteAmount = creditNoteEnabled && appliedCreditNote ? (parseFloat(creditNoteAmountToUse) || 0) : 0;
   const giftVoucherAmount = giftVoucherEnabled && appliedGiftVoucher ? (parseFloat(giftVoucherAmountToUse) || 0) : 0;
-  const effectiveTotal = Math.max(0, cartTotal - tradeInAmount - creditNoteAmount - giftVoucherAmount);
+  const effectiveTotal = Math.max(0, cartTotal - discountValue - tradeInAmount - creditNoteAmount - giftVoucherAmount);
 
   async function completeSale(printInvoice: boolean) {
     setProcessing(true);
     try {
       // Safety: recalculate total from cart to prevent stale-state mismatches
       const verifiedTotal = cart.reduce((sum, c) => sum + (c.unitPrice * c.sellQty), 0);
+      const discount = discountEnabled ? (parseFloat(discountAmount) || 0) : 0;
+      const netTotal = verifiedTotal - discount; // What customer owes after discount
       const invoiceNum = await generateInvoiceNumber();
       // Determine payment amounts
-      let amountPaid = verifiedTotal;
+      let amountPaid = netTotal;
       let balanceDue = 0;
       let status = 'paid';
 
@@ -299,14 +307,14 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         const partial = partialAmount ? parseFloat(partialAmount) : 0;
         const totalDeposit = partial + tradeInAmount + creditNoteAmount + giftVoucherAmount;
         amountPaid = totalDeposit;
-        balanceDue = verifiedTotal - totalDeposit;
-        status = totalDeposit > 0 ? (totalDeposit >= verifiedTotal ? 'paid' : 'partial') : 'unpaid';
+        balanceDue = netTotal - totalDeposit;
+        status = totalDeposit > 0 ? (totalDeposit >= netTotal ? 'paid' : 'partial') : 'unpaid';
       }
 
-      // For pay-now sales, the full verifiedTotal is paid (trade-in + credit note + gift voucher count as payment)
+      // For pay-now sales, the full netTotal is paid (trade-in + credit note + gift voucher count as payment)
       const totalCredits = tradeInAmount + creditNoteAmount + giftVoucherAmount;
-      const primaryMethod = totalCredits >= verifiedTotal
-        ? (giftVoucherAmount >= verifiedTotal ? 'gift_voucher' : creditNoteAmount >= verifiedTotal ? 'credit_note' : 'trade_in')
+      const primaryMethod = totalCredits >= netTotal
+        ? (giftVoucherAmount >= netTotal ? 'gift_voucher' : creditNoteAmount >= netTotal ? 'credit_note' : 'trade_in')
         : (saleType === 'invoice' && amountPaid === 0 ? 'account' : paymentMethod);
 
       const saleId = await createSale({
@@ -316,10 +324,12 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         customer_id: selectedCustomer ? selectedCustomer.id : null,
         payment_method: primaryMethod,
         total: verifiedTotal,
+        discount,
         sold_by: currentUser.initials,
         invoice_number: invoiceNum,
         notes: [
           saleNotes,
+          discount > 0 ? `Discount: £${discount.toFixed(2)}` : '',
           tradeInEnabled ? `Trade-in: ${tradeInDesc} (£${tradeInAmount.toFixed(2)})` : '',
           creditNoteEnabled && appliedCreditNote ? `Credit Note: ${appliedCreditNote.credit_note_number} (£${creditNoteAmount.toFixed(2)})` : '',
           giftVoucherEnabled && appliedGiftVoucher ? `Gift Voucher: ${appliedGiftVoucher.voucher_number} (£${giftVoucherAmount.toFixed(2)})` : '',
@@ -583,10 +593,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
         </div>
       </div>
 
-      {/* DATE PICKER V3 */}
-      <div style={{background:'#ff0000',color:'#fff',padding:'20px',marginBottom:'10px',fontSize:'24px',fontWeight:'bold'}}>
-        🔴 SALE DATE TEST — If you see this, the code is fresh!
-      </div>
+      {/* DATE PICKER */}
       <div className="card bg-base-100 border border-primary/30 shadow mb-4">
         <div className="card-body p-3">
           <div className="flex items-center gap-3 flex-wrap">
@@ -805,6 +812,10 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                 <button
                   className="btn btn-success btn-lg gap-2 flex-1"
                   onClick={() => {
+                    if (discountEnabled && discountValue <= 0) {
+                      alert('Please enter a discount amount');
+                      return;
+                    }
                     if (tradeInEnabled && !tradeInDesc.trim()) {
                       alert('Please enter a description for the trade-in item');
                       return;
@@ -819,11 +830,15 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                   }}
                   disabled={processing}
                 >
-                  <CheckCircle size={20} /> Pay Now + Receipt — £{(tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) && (tradeInAmount + creditNoteAmount + giftVoucherAmount) > 0 ? effectiveTotal.toFixed(2) + ' to pay' : cartTotal.toFixed(2)}
+                  <CheckCircle size={20} /> Pay Now + Receipt — £{(discountEnabled || tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) && (discountValue + tradeInAmount + creditNoteAmount + giftVoucherAmount) > 0 ? effectiveTotal.toFixed(2) + ' to pay' : cartTotal.toFixed(2)}
                 </button>
                 <button
                   className="btn btn-outline btn-warning btn-lg gap-2 flex-1"
                   onClick={() => {
+                    if (discountEnabled && discountValue <= 0) {
+                      alert('Please enter a discount amount');
+                      return;
+                    }
                     if (tradeInEnabled && !tradeInDesc.trim()) {
                       alert('Please enter a description for the trade-in item');
                       return;
@@ -876,7 +891,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                       <span className="text-lg font-bold">£</span>
                       <input type="text" className="input input-bordered input-sm w-32" value={partialAmount}
                         onChange={e => setPartialAmount(e.target.value)} placeholder="0.00" />
-                      <span className="text-sm text-base-content/50">of £{cartTotal.toFixed(2)}</span>
+                      <span className="text-sm text-base-content/50">of £{(cartTotal - discountValue).toFixed(2)}</span>
                     </div>
                   </div>
                   {/* Payment method for deposit */}
@@ -903,6 +918,10 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                     <button
                       className="btn btn-info gap-2 flex-1"
                       onClick={() => {
+                        if (discountEnabled && discountValue <= 0) {
+                          alert('Please enter a discount amount');
+                          return;
+                        }
                         if (tradeInEnabled && !tradeInDesc.trim()) {
                           alert('Please enter a description for the trade-in item');
                           return;
@@ -921,6 +940,10 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                     <button
                       className="btn btn-outline btn-info gap-2 flex-1"
                       onClick={() => {
+                        if (discountEnabled && discountValue <= 0) {
+                          alert('Please enter a discount amount');
+                          return;
+                        }
                         if (tradeInEnabled && !tradeInDesc.trim()) {
                           alert('Please enter a description for the trade-in item');
                           return;
@@ -942,6 +965,53 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
 
               {/* Optional extras - collapsible section */}
               <div className="divider text-xs text-base-content/40 mt-4 mb-1">Optional Extras</div>
+
+              {/* Discount */}
+              <div className="mt-1">
+                <label className="label cursor-pointer justify-start gap-2">
+                  <input type="checkbox" className="toggle toggle-secondary" checked={discountEnabled}
+                    onChange={e => {
+                      setDiscountEnabled(e.target.checked);
+                      if (!e.target.checked) setDiscountAmount('');
+                    }} />
+                  <span className="label-text font-semibold flex items-center gap-1">
+                    🏷️ Discount
+                  </span>
+                </label>
+              </div>
+
+              {discountEnabled && (
+                <div className="mt-2 p-3 bg-secondary/10 border border-secondary/30 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2 text-secondary font-semibold text-sm">🏷️ Sale Discount</div>
+                  <div className="form-control">
+                    <label className="label py-1"><span className="label-text text-sm">Discount Amount (£)</span></label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold">£</span>
+                      <input type="text" className="input input-bordered input-sm w-32"
+                        value={discountAmount}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (/^\d*\.?\d{0,2}$/.test(val) || val === '') {
+                            let v = parseFloat(val) || 0;
+                            if (v > cartTotal) v = cartTotal;
+                            setDiscountAmount(v > 0 ? (val.endsWith('.') || val.endsWith('.0') || val.endsWith('.00') ? val : String(v)) : val);
+                          }
+                        }}
+                        placeholder="0.00" />
+                      <span className="text-sm text-base-content/50">of £{cartTotal.toFixed(2)} total</span>
+                    </div>
+                  </div>
+                  {discountValue > 0 && (
+                    <div className="bg-secondary/20 rounded p-2 text-sm">
+                      <div className="flex justify-between"><span>Cart Total:</span><span>£{cartTotal.toFixed(2)}</span></div>
+                      <div className="flex justify-between text-secondary font-bold"><span>Discount:</span><span>-£{discountValue.toFixed(2)}</span></div>
+                      <div className="divider my-1"></div>
+                      <div className="flex justify-between font-bold text-lg"><span>After Discount:</span><span>£{(cartTotal - discountValue).toFixed(2)}</span></div>
+                    </div>
+                  )}
+                  {discountValue <= 0 && <p className="text-xs text-error">Please enter a discount amount</p>}
+                </div>
+              )}
 
               {/* Trade-In */}
               <div className="mt-1">
@@ -1335,8 +1405,8 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                     <p><strong>Payment:</strong> {paymentMethod === 'cash' ? '💵 Cash' : paymentMethod === 'sumup' ? '💳 SumUp' : paymentMethod === 'bank_transfer' ? '🏦 Bank Transfer' : '🌐 eBay'}
                     {(tradeInEnabled || creditNoteEnabled || giftVoucherEnabled) ? ` — £${effectiveTotal.toFixed(2)}` : ''}</p>
                   )}
-                  {effectiveTotal <= 0 && (tradeInAmount + creditNoteAmount + giftVoucherAmount >= cartTotal) && (
-                    <p><strong>Payment:</strong> {giftVoucherAmount >= cartTotal ? '🎁 Fully covered by gift voucher' : creditNoteAmount >= cartTotal ? '🏷️ Fully covered by credit note' : '🔄 Fully covered by trade-in'}</p>
+                  {effectiveTotal <= 0 && (discountValue + tradeInAmount + creditNoteAmount + giftVoucherAmount >= cartTotal) && (
+                    <p><strong>Payment:</strong> {discountValue >= cartTotal ? '🏷️ Fully covered by discount' : giftVoucherAmount >= (cartTotal - discountValue) ? '🎁 Fully covered by gift voucher' : creditNoteAmount >= (cartTotal - discountValue) ? '🏷️ Fully covered by credit note' : '🔄 Fully covered by trade-in'}</p>
                   )}
                 </>
               ) : (
@@ -1346,13 +1416,24 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
                   {partialAmount && parseFloat(partialAmount) > 0 && (
                     <p><strong>Deposit:</strong> £{parseFloat(partialAmount).toFixed(2)} via {paymentMethod === 'cash' ? '💵 Cash' : paymentMethod === 'sumup' ? '💳 SumUp' : paymentMethod === 'bank_transfer' ? '🏦 Bank Transfer' : '🌐 eBay'}</p>
                   )}
-                  <p className="text-warning font-semibold mt-1">Balance Due: £{(cartTotal - tradeInAmount - creditNoteAmount - giftVoucherAmount - (parseFloat(partialAmount) || 0)).toFixed(2)}</p>
+                  <p className="text-warning font-semibold mt-1">Balance Due: £{(cartTotal - discountValue - tradeInAmount - creditNoteAmount - giftVoucherAmount - (parseFloat(partialAmount) || 0)).toFixed(2)}</p>
                 </>
               )}
               {saleDate !== new Date().toISOString().split('T')[0] && (
                 <p className="text-warning font-semibold">⚠️ Backdated to: {new Date(saleDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p>
               )}
-              <p className="text-xl font-bold text-primary mt-2">Total: £{cartTotal.toFixed(2)}</p>
+              {discountEnabled && discountValue > 0 && (
+                <div className="my-2 p-2 bg-secondary/10 rounded">
+                  <p><strong>🏷️ Discount:</strong> <span className="text-secondary font-bold">-£{discountValue.toFixed(2)}</span></p>
+                </div>
+              )}
+              <p className="text-xl font-bold text-primary mt-2">
+                {discountValue > 0 ? (
+                  <>Subtotal: £{cartTotal.toFixed(2)} → <span className="text-success">Total: £{(cartTotal - discountValue).toFixed(2)}</span></>
+                ) : (
+                  <>Total: £{cartTotal.toFixed(2)}</>
+                )}
+              </p>
             </div>
             <div className={`alert ${printReceipt ? 'alert-success' : 'alert-warning'} mt-2`}>
               {printReceipt

@@ -639,17 +639,19 @@ export async function createSale(sale: {
   sale_type?: string;
   due_date?: string;
   sale_date?: string;
+  discount?: number;
 }): Promise<number> {
   const custId = sale.customer_id !== null ? String(sale.customer_id) : 'NULL';
-  const amountPaid = sale.amount_paid ?? sale.total;
+  const discount = sale.discount ?? 0;
+  const amountPaid = sale.amount_paid ?? (sale.total - discount);
   const balanceDue = sale.balance_due ?? 0;
   const status = sale.status ?? 'paid';
   const saleType = sale.sale_type ?? 'receipt';
   const dueDate = sale.due_date ?? '';
   const saleDate = sale.sale_date || new Date().toISOString().replace('T', ' ').slice(0, 19);
   await window.tasklet.sqlExec(
-    `INSERT INTO sylvias_sales (customer_name, customer_id, payment_method, total, sold_by, invoice_number, notes, amount_paid, balance_due, status, sale_type, due_date, sale_date)
-     VALUES ('${esc(sale.customer_name)}', ${custId}, '${esc(sale.payment_method)}', ${sale.total}, '${esc(sale.sold_by)}', '${esc(sale.invoice_number)}', '${esc(sale.notes)}', ${amountPaid}, ${balanceDue}, '${esc(status)}', '${esc(saleType)}', '${esc(dueDate)}', '${esc(saleDate)}')`
+    `INSERT INTO sylvias_sales (customer_name, customer_id, payment_method, total, sold_by, invoice_number, notes, amount_paid, balance_due, status, sale_type, due_date, sale_date, discount)
+     VALUES ('${esc(sale.customer_name)}', ${custId}, '${esc(sale.payment_method)}', ${sale.total}, '${esc(sale.sold_by)}', '${esc(sale.invoice_number)}', '${esc(sale.notes)}', ${amountPaid}, ${balanceDue}, '${esc(status)}', '${esc(saleType)}', '${esc(dueDate)}', '${esc(saleDate)}', ${discount})`
   );
   const rows = await window.tasklet.sqlQuery(
     `SELECT id FROM sylvias_sales WHERE invoice_number = '${esc(sale.invoice_number)}' ORDER BY id DESC LIMIT 1`

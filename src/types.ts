@@ -82,6 +82,7 @@ export interface Sale {
   invoice_number: string;
   notes: string;
   created_at: string;
+  discount: number;
 }
 
 // ── Payments (against invoices) ──

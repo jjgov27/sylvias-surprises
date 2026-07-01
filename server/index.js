@@ -134,6 +134,7 @@ const ALTER_SQLS = [
   "ALTER TABLE sylvias_stock_check_items ADD COLUMN signoff_by TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE sylvias_stock_check_items ADD COLUMN signoff_at TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE sylvias_stock_check_items ADD COLUMN resolution TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sylvias_sales ADD COLUMN discount REAL NOT NULL DEFAULT 0",
 ];
 
 // Create all tables

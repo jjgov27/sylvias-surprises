@@ -131,8 +131,9 @@ export const SalesLedger: React.FC<Props> = ({ currentUser, onViewInvoice }) => 
   }
 
   const totalRevenue = sales.reduce((sum, s) => sum + s.total, 0);
+  const totalDiscounts = sales.reduce((sum, s) => sum + (s.discount || 0), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const netTotal = totalRevenue - totalExpenses;
+  const netTotal = totalRevenue - totalDiscounts - totalExpenses;
 
   // Build combined ledger entries grouped by date
   const byDate: Record<string, LedgerEntry[]> = {};
@@ -317,6 +318,7 @@ print('OK')
         <div className="stat bg-base-200 rounded-lg p-3">
           <div className="stat-title text-xs">Total Sales</div>
           <div className="stat-value text-base text-success">{fmt(totalRevenue)}</div>
+          {totalDiscounts > 0 && <div className="stat-desc text-secondary">Discounts: -{fmt(totalDiscounts)}</div>}
           <div className="stat-desc text-xs">{sales.length} transactions</div>
         </div>
         <div className="stat bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -542,6 +544,9 @@ print('OK')
                             <td>{sale.sold_by}</td>
                             <td className="text-right">
                               <span className="font-semibold text-success">+{fmt(sale.total)}</span>
+                              {(sale.discount || 0) > 0 && (
+                                <div className="text-xs text-secondary">Disc: -{fmt(sale.discount)}</div>
+                              )}
                               {sale.balance_due != null && sale.balance_due > 0 && (
                                 <div className="text-xs text-error">Bal: {fmt(sale.balance_due)}</div>
                               )}

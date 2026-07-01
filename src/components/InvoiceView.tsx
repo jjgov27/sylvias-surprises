@@ -166,10 +166,27 @@ c.setStrokeColor(colors.HexColor("#5C3D2E"))
 c.setLineWidth(2)
 c.line(col[3] - 10, y + 8, col[4], y + 8)
 y -= 10
-c.setFont("Helvetica-Bold", 13)
-c.setFillColor(colors.HexColor("#5C3D2E"))
-c.drawRightString(col[3], y, "TOTAL")
-c.drawRightString(col[4], y, f"\\u00a3${sale.total.toFixed(2)}")
+discount = ${(sale.discount || 0).toFixed(2)}
+if discount > 0:
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(colors.HexColor("#5C3D2E"))
+    c.drawRightString(col[3], y, "SUBTOTAL")
+    c.drawRightString(col[4], y, f"\\u00a3${sale.total.toFixed(2)}")
+    y -= 18
+    c.setFont("Helvetica", 10)
+    c.setFillColor(colors.HexColor("#9333EA"))
+    c.drawRightString(col[3], y, "DISCOUNT")
+    c.drawRightString(col[4], y, f"-\\u00a3{discount:.2f}")
+    y -= 18
+    c.setFont("Helvetica-Bold", 13)
+    c.setFillColor(colors.HexColor("#5C3D2E"))
+    c.drawRightString(col[3], y, "TOTAL")
+    c.drawRightString(col[4], y, f"\\u00a3{${sale.total.toFixed(2)} - discount:.2f}")
+else:
+    c.setFont("Helvetica-Bold", 13)
+    c.setFillColor(colors.HexColor("#5C3D2E"))
+    c.drawRightString(col[3], y, "TOTAL")
+    c.drawRightString(col[4], y, f"\\u00a3${sale.total.toFixed(2)}")
 
 # Payment summary box
 y -= 30
@@ -382,7 +399,7 @@ print("OK")
 `;
 
   await window.tasklet.writeFileToDisk('/tmp/gen_invoice.py', script);
-  const result = await window.tasklet.runCommand('cd /tmp && python3 gen_invoice.py', 120);
+  const result = await window.tasklet.runCommand('cd /tmp && uv run --with reportlab gen_invoice.py', 120);
 
   if (!result.log.includes('OK')) {
     throw new Error('Failed to generate invoice PDF: ' + result.log);
@@ -667,8 +684,18 @@ export const InvoiceView: React.FC<Props> = ({ saleId, onBack }) => {
         {/* Total */}
         <div className="flex justify-end border-t-2 pt-3 mb-4" style={{borderColor: '#5C3D2E'}}>
           <div className="text-right">
-            <span className="text-lg font-bold mr-6" style={{color: '#5C3D2E'}}>TOTAL</span>
-            <span className="text-lg font-bold" style={{color: '#5C3D2E'}}>£{sale.total.toFixed(2)}</span>
+            {(sale.discount || 0) > 0 ? (
+              <div className="flex flex-col items-end gap-1">
+                <div><span className="text-sm font-bold mr-6" style={{color: '#5C3D2E'}}>SUBTOTAL</span><span className="text-sm font-bold" style={{color: '#5C3D2E'}}>£{sale.total.toFixed(2)}</span></div>
+                <div><span className="text-sm font-bold mr-6" style={{color: '#9333EA'}}>DISCOUNT</span><span className="text-sm font-bold" style={{color: '#9333EA'}}>-£{sale.discount.toFixed(2)}</span></div>
+                <div><span className="text-lg font-bold mr-6" style={{color: '#5C3D2E'}}>TOTAL</span><span className="text-lg font-bold" style={{color: '#5C3D2E'}}>£{(sale.total - sale.discount).toFixed(2)}</span></div>
+              </div>
+            ) : (
+              <>
+                <span className="text-lg font-bold mr-6" style={{color: '#5C3D2E'}}>TOTAL</span>
+                <span className="text-lg font-bold" style={{color: '#5C3D2E'}}>£{sale.total.toFixed(2)}</span>
+              </>
+            )}
           </div>
         </div>
 
