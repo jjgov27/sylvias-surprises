@@ -1020,6 +1020,17 @@ export async function getCogsByRange(from: string, to: string): Promise<number> 
   return (rows[0] as unknown as {cogs: number}).cogs;
 }
 
+// Bullion COGS — cost of bullion items sold in a date range
+// Only becomes an expense (COGS) when the bullion is sold, not when purchased
+export async function getBullionCOGSByRange(from: string, to: string): Promise<number> {
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(purchase_price + premium_paid), 0) as cogs
+     FROM sylvias_bullion
+     WHERE status = 'sold' AND date(sell_date) >= '${esc(from)}' AND date(sell_date) <= '${esc(to)}'`
+  );
+  return (rows[0] as unknown as {cogs: number}).cogs;
+}
+
 export async function getSalesByMonthInRange(from: string, to: string): Promise<{month: string; total: number; count: number}[]> {
   const rows = await window.tasklet.sqlQuery(
     `SELECT strftime('%Y-%m', sale_date) as month, SUM(total - discount) as total, COUNT(*) as count

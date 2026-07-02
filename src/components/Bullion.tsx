@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BullionItem, StaffUser, Customer } from '../types';
-import { getBullion, addBullion, updateBullion, sellBullion, deleteBullion, getBullionSummary, searchCustomers, addCustomer, getCustomerById, SALUTATIONS, titleCase as dbTitleCase, addExpense } from '../utils/db';
+import { getBullion, addBullion, updateBullion, sellBullion, deleteBullion, getBullionSummary, searchCustomers, addCustomer, getCustomerById, SALUTATIONS, titleCase as dbTitleCase } from '../utils/db';
 import { PostcodeLookup } from './PostcodeLookup';
 
 const METAL_TYPES = ['Gold', 'Silver', 'Platinum', 'Palladium'];
@@ -202,19 +202,8 @@ export function Bullion({ user }: Props) {
       await updateBullion(editingId, data);
     } else {
       await addBullion(data);
-      // Record expense so the purchase shows in CashUp/Takings
-      const totalCost = pp + prem;
-      const descText = `Bullion: ${titleCase(description.trim())} (${metalType} ${form})`;
-      await addExpense({
-        expense_date: purchaseDate,
-        category: 'Bullion Purchase',
-        description: descText,
-        amount: totalCost,
-        receipt_photo: '',
-        entered_by: user.initials,
-        payment_method: purchasePaymentMethod,
-        paid_by: user.initials,
-      });
+      // Bullion purchase is an asset (inventory), not an expense.
+      // The cost becomes COGS only when the bullion is sold.
     }
     resetForm();
     load();

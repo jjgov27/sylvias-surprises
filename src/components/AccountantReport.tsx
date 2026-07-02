@@ -11,6 +11,7 @@ import {
   getSalesSplitByDateRange, SalesSplit,
   getSupplierInvoicesTotals,
   getDiscountTotalForRange,
+  getBullionCOGSByRange,
 } from '../utils/db';
 import { BarChart3, TrendingUp, TrendingDown, Package, PoundSterling, Download, Calendar, FileText, Printer } from 'lucide-react';
 
@@ -89,6 +90,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const [stockCost, setStockCost] = useState(0);
   const [supplierDebt, setSupplierDebt] = useState(0);
   const [cogs, setCogs] = useState(0);
+  const [bullionCogs, setBullionCogs] = useState(0);
   const [expByCat, setExpByCat] = useState<{ category: string; total: number }[]>([]);
   const [expByMonth, setExpByMonth] = useState<{ month: string; total: number }[]>([]);
   const [salesByMonth, setSalesByMonth] = useState<{ month: string; total: number; count: number }[]>([]);
@@ -108,6 +110,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const [priorSalesTotals, setPriorSalesTotals] = useState({ total_sales: 0, sale_count: 0 });
   const [priorExpTotals, setPriorExpTotals] = useState({ total_expenses: 0, expense_count: 0 });
   const [priorCogs, setPriorCogs] = useState(0);
+  const [priorBullionCogs, setPriorBullionCogs] = useState(0);
   const [priorExpByCat, setPriorExpByCat] = useState<Record<string, number>>({});
   const [priorSalesByPM, setPriorSalesByPM] = useState<{ method: string; total: number; count: number }[]>([]);
   const [priorLabel, setPriorLabel] = useState('');
@@ -132,11 +135,12 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
     if (range) {
       const prior = getPriorYearRange(range.from, range.to);
 
-      const [st, et, cg, ec, em, sm, sp, splitData, discData,
-             pst, pet, pcg, pec, psp, priorSplitData, pDiscData] = await Promise.all([
+      const [st, et, cg, bcg, ec, em, sm, sp, splitData, discData,
+             pst, pet, pcg, pbcg, pec, psp, priorSplitData, pDiscData] = await Promise.all([
         getSalesTotalsByRange(range.from, range.to),
         getExpensesTotalsByRange(range.from, range.to),
         getCogsByRange(range.from, range.to),
+        getBullionCOGSByRange(range.from, range.to),
         getExpensesByCategoryInRange(range.from, range.to),
         getExpensesMonthlyInRange(range.from, range.to),
         getSalesByMonthInRange(range.from, range.to),
@@ -147,16 +151,17 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         getSalesTotalsByRange(prior.from, prior.to),
         getExpensesTotalsByRange(prior.from, prior.to),
         getCogsByRange(prior.from, prior.to),
+        getBullionCOGSByRange(prior.from, prior.to),
         getExpensesByCategoryForPeriod(prior.from, prior.to),
         getSalesByPaymentMethodInRange(prior.from, prior.to),
         getSalesSplitByDateRange(prior.from, prior.to),
         getDiscountTotalForRange(prior.from, prior.to),
       ]);
 
-      setSalesTotals(st); setExpTotals(et); setCogs(cg);
+      setSalesTotals(st); setExpTotals(et); setCogs(cg); setBullionCogs(bcg);
       setExpByCat(ec); setExpByMonth(em); setSalesByMonth(sm); setSalesByPM(sp);
       setSplit(splitData); setDiscountInfo(discData);
-      setPriorSalesTotals(pst); setPriorExpTotals(pet); setPriorCogs(pcg);
+      setPriorSalesTotals(pst); setPriorExpTotals(pet); setPriorCogs(pcg); setPriorBullionCogs(pbcg);
       setPriorExpByCat(pec); setPriorSalesByPM(psp); setPriorSplit(priorSplitData);
       setPriorDiscountInfo(pDiscData);
 
@@ -168,18 +173,19 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
       const priorToLabel = formatDateLong(prior.to);
       setPriorLabel(`${priorFromLabel} — ${priorToLabel}`);
     } else {
-      const [st, et, cg, ec, sm, sp, splitData, discData] = await Promise.all([
+      const [st, et, cg, bcg, ec, sm, sp, splitData, discData] = await Promise.all([
         getSalesTotals(), getExpensesTotals(), getCostOfGoodsSold(),
+        getBullionCOGSByRange('2000-01-01', '2099-12-31'),
         getExpensesByCategory(), getSalesByMonth(), getSalesByPaymentMethod(),
         getSalesSplitByDateRange('2000-01-01', '2099-12-31'),
         getDiscountTotalForRange('2000-01-01', '2099-12-31'),
       ]);
-      setSalesTotals(st); setExpTotals(et); setCogs(cg); setExpByCat(ec);
+      setSalesTotals(st); setExpTotals(et); setCogs(cg); setBullionCogs(bcg); setExpByCat(ec);
       setExpByMonth([]); setSalesByMonth(sm); setSalesByPM(sp);
       setSplit(splitData); setDiscountInfo(discData);
       setPriorSalesTotals({ total_sales: 0, sale_count: 0 });
       setPriorExpTotals({ total_expenses: 0, expense_count: 0 });
-      setPriorCogs(0); setPriorExpByCat({}); setPriorSalesByPM([]);
+      setPriorCogs(0); setPriorBullionCogs(0); setPriorExpByCat({}); setPriorSalesByPM([]);
       setPriorSplit(null); setPriorDiscountInfo({ totalDiscount: 0, discountCount: 0 });
       setDateLabel('All Time'); setPriorLabel('');
     }
@@ -205,12 +211,14 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const priorStockSalesTotal = priorSplit?.stockSalesTotal || 0;
   const priorConsignmentCommission = priorSplit?.consignmentCommission || 0;
 
-  // Gross profit = Stock sales (already net of discounts) - COGS + Consignment commission
-  const stockGrossProfit = stockSalesTotal - cogs;
+  // Gross profit = Stock sales (already net of discounts) - Stock COGS - Bullion COGS + Consignment commission
+  const totalCogs = cogs + bullionCogs;
+  const stockGrossProfit = stockSalesTotal - totalCogs;
   const totalGrossProfit = stockGrossProfit + consignmentCommission;
   const netProfit = totalGrossProfit - expTotals.total_expenses;
 
-  const priorStockGrossProfit = priorStockSalesTotal - priorCogs;
+  const priorTotalCogs = priorCogs + priorBullionCogs;
+  const priorStockGrossProfit = priorStockSalesTotal - priorTotalCogs;
   const priorTotalGrossProfit = priorStockGrossProfit + priorConsignmentCommission;
   const priorNetProfit = priorTotalGrossProfit - priorExpTotals.total_expenses;
 
@@ -274,6 +282,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
           priorCount: priorDiscountInfo.discountCount,
         },
         cogs: { current: cogs, prior: priorCogs },
+        bullionCogs: { current: bullionCogs, prior: priorBullionCogs },
         grossProfit: { current: totalGrossProfit, prior: priorTotalGrossProfit },
         netSurplus: { current: netProfit, prior: priorNetProfit },
 
@@ -463,15 +472,31 @@ if disc_current > 0:
 # Blank
 ie_rows.append(['', ''] if not has_prior else ['', '', ''])
 
-# COGS (stock only)
+# COGS (stock)
 cogs_row = ['Cost of Goods Sold (Stock)', pounds(data['cogs']['current'])]
 if has_prior: cogs_row.append(pounds(data['cogs']['prior']))
 ie_rows.append(cogs_row)
 
-# Stock Gross Profit
-sgp = inc['stockSales'] - data['cogs']['current']
-psgp = pinc['stockSales'] - data['cogs']['prior'] if has_prior else 0
-sgp_row = ['Stock Gross Profit', pounds(sgp)]
+# COGS (bullion) — only show if any bullion was sold
+bcogs = data.get('bullionCogs', {})
+bcogs_cur = bcogs.get('current', 0)
+bcogs_pri = bcogs.get('prior', 0)
+if bcogs_cur > 0 or bcogs_pri > 0:
+    bcogs_row = ['Cost of Goods Sold (Bullion)', pounds(bcogs_cur)]
+    if has_prior: bcogs_row.append(pounds(bcogs_pri))
+    ie_rows.append(bcogs_row)
+    total_cogs_cur = data['cogs']['current'] + bcogs_cur
+    total_cogs_pri = data['cogs']['prior'] + bcogs_pri if has_prior else 0
+    tcogs_row = ['Total COGS', pounds(total_cogs_cur)]
+    if has_prior: tcogs_row.append(pounds(total_cogs_pri))
+    ie_rows.append(tcogs_row)
+
+# Stock Gross Profit (includes bullion COGS deduction)
+total_cogs_for_gp = data['cogs']['current'] + bcogs_cur
+prior_total_cogs_for_gp = (data['cogs']['prior'] + bcogs_pri) if has_prior else 0
+sgp = inc['stockSales'] - total_cogs_for_gp
+psgp = pinc['stockSales'] - prior_total_cogs_for_gp if has_prior else 0
+sgp_row = ['Owned Stock Gross Profit', pounds(sgp)]
 if has_prior: sgp_row.append(pounds(psgp))
 ie_rows.append(sgp_row)
 sgp_idx = len(ie_rows) - 1
@@ -774,9 +799,15 @@ print('OK')
               <tr><td colSpan={priorLabel ? 3 : 2}></td></tr>
 
               {/* COGS */}
-              <tr><td>Cost of Goods Sold (Stock Only)</td><td className="text-right">{fmt(cogs)}</td>{priorLabel && <td className="text-right">{priorCogs ? fmt(priorCogs) : '-'}</td>}</tr>
+              <tr><td>Cost of Goods Sold (Stock)</td><td className="text-right">{fmt(cogs)}</td>{priorLabel && <td className="text-right">{priorCogs ? fmt(priorCogs) : '-'}</td>}</tr>
+              {(bullionCogs > 0 || priorBullionCogs > 0) && (
+                <tr><td>Cost of Goods Sold (Bullion)</td><td className="text-right">{fmt(bullionCogs)}</td>{priorLabel && <td className="text-right">{priorBullionCogs ? fmt(priorBullionCogs) : '-'}</td>}</tr>
+              )}
+              {(bullionCogs > 0 || priorBullionCogs > 0) && (
+                <tr className="bg-base-200"><td className="pl-6 italic text-sm">Total COGS</td><td className="text-right">{fmt(totalCogs)}</td>{priorLabel && <td className="text-right">{fmt(priorTotalCogs)}</td>}</tr>
+              )}
               <tr className="font-bold bg-blue-50">
-                <td className="text-blue-800">Stock Gross Profit</td>
+                <td className="text-blue-800">Owned Stock Gross Profit</td>
                 <td className="text-right text-blue-700">{fmt(stockGrossProfit)}</td>
                 {priorLabel && <td className="text-right">{fmt(priorStockGrossProfit)}</td>}
               </tr>
