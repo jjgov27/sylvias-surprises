@@ -220,12 +220,12 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
       </div>
 
       {/* Current Stock Holding */}
-      {stockHolding.items > 0 && (
+      {true && (
         <div className="alert bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-300">
           <div className="flex items-center gap-3 w-full">
             <Package size={20} className="text-blue-600" />
             <div className="flex-1">
-              <div className="font-bold text-lg text-blue-700">Present Stock Holding</div>
+              <div className="font-bold text-lg text-blue-700">Present Stock Holding ({stockHolding.items} items, {stockHolding.units} units)</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
                 <div>
                   <div className="text-xs text-base-content/60">Items</div>
