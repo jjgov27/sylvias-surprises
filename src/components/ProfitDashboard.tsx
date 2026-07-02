@@ -11,7 +11,7 @@ import {
   getSalesSplitByDateRange,
   SalesSplit,
   getDiscountTotalForRange,
-  getStockHolding,
+  getStockHolding, getBullionHeld,
 } from '../utils/db';
 import {
   TrendingUp,
@@ -67,6 +67,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
   const [consignmentProfits, setConsignmentProfits] = useState<ConsignmentProfit[]>([]);
   const [discountTotal, setDiscountTotal] = useState(0);
   const [discountCount, setDiscountCount] = useState(0);
+  const [bullionHeld, setBullionHeld] = useState<{items: number; totalCost: number}>({items:0,totalCost:0});
   const [stockHolding, setStockHolding] = useState<{items: number; units: number; costValue: number; retailValue: number}>({items:0,units:0,costValue:0,retailValue:0});
 
   const fmt = (n: number) => `£${n.toFixed(2)}`;
@@ -105,6 +106,12 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         const holdingData = await getStockHolding();
         setStockHolding(holdingData);
       } catch(e) { console.error('Stock holding fetch error:', e); }
+
+      // Fetch bullion held
+      try {
+        const bullionData = await getBullionHeld();
+        setBullionHeld(bullionData);
+      } catch(e) { console.error("Bullion held fetch error:", e); }
 
       const withAge = slow.map((s) => ({
         ...s,
@@ -242,6 +249,28 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
                 <div>
                   <div className="text-xs text-base-content/60">Retail Value</div>
                   <div className="font-semibold text-blue-700">{fmt(stockHolding.retailValue)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bullion Held */}
+      {bullionHeld.items > 0 && (
+        <div className="alert bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-400">
+          <div className="flex items-center gap-3 w-full">
+            <Package size={20} className="text-yellow-600" />
+            <div className="flex-1">
+              <div className="font-bold text-lg text-yellow-700">Bullion Held</div>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                <div>
+                  <div className="text-xs text-base-content/60">Items</div>
+                  <div className="font-semibold text-yellow-700">{bullionHeld.items}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Total Cost (inc. Premium)</div>
+                  <div className="font-semibold text-yellow-700">{fmt(bullionHeld.totalCost)}</div>
                 </div>
               </div>
             </div>

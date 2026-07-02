@@ -3140,3 +3140,9 @@ export async function getStockHolding(): Promise<{items: number; units: number; 
   }
   return {items: 0, units: 0, costValue: 0, retailValue: 0};
 }
+
+// Bullion held summary
+export async function getBullionHeld(): Promise<{items: number; totalCost: number}> {
+  const rows: any[] = await window.tasklet.sqlQuery("SELECT COUNT(*) as items, COALESCE(SUM(purchase_price + premium_paid), 0) as totalCost FROM sylvias_bullion WHERE status = 'held'");
+  return { items: rows[0]?.items || 0, totalCost: rows[0]?.totalCost || 0 };
+}
