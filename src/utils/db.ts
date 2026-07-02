@@ -3129,7 +3129,7 @@ export async function getStockCategorySummary(): Promise<{category: string; item
 
 // Stock holding summary
 export async function getStockHolding(): Promise<{items: number; units: number; costValue: number; retailValue: number}> {
-  const rows: any[] = await sqlQuery("SELECT COUNT(*) as items, SUM(qty) as units, SUM(cost * qty) as cost_value, SUM(rrp * qty) as retail_value FROM sylvias_stock WHERE qty > 0");
+  const rows: any[] = await window.tasklet.sqlQuery("SELECT COUNT(*) as items, SUM(qty) as units, SUM(cost * qty) as cost_value, SUM(rrp * qty) as retail_value FROM sylvias_stock WHERE qty > 0");
   if (rows.length > 0) {
     return {
       items: rows[0].items || 0,
