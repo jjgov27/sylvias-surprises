@@ -42,6 +42,112 @@ function today(): string {
 
 interface Props { user: StaffUser; }
 
+// Extracted to prevent re-render/remount on every keystroke
+const CustomerPicker = React.memo(({ mode, selected, onSelect, search, setSearch, results, setResults, showDropdown, setShowDropdown, showNew, setShowNew, newData, setNewData }: {
+    mode: string; selected: Customer | null; onSelect: (c: Customer | null) => void;
+    search: string; setSearch: (s: string) => void; results: Customer[]; setResults: (r: Customer[]) => void;
+    showDropdown: boolean; setShowDropdown: (b: boolean) => void;
+    showNew: boolean; setShowNew: (b: boolean) => void;
+    newData: { salutation: string; first_name: string; surname: string; address_line1: string; address_line2: string; address_line3: string; postcode: string; phone: string; email: string };
+    setNewData: (d: { salutation: string; first_name: string; surname: string; address_line1: string; address_line2: string; address_line3: string; postcode: string; phone: string; email: string }) => void;
+  }) => (
+    <div style={{ position: 'relative' }}>
+      {selected ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', background: '#f0fdf4' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>
+              {[selected.salutation, selected.first_name, selected.surname].filter(Boolean).join(' ')}
+            </div>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>
+              {[selected.address_line1, selected.postcode].filter(Boolean).join(', ')}
+              {selected.phone ? ` · ${selected.phone}` : ''}
+            </div>
+          </div>
+          <button onClick={() => { onSelect(null); setSearch(''); setResults([]); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✕</button>
+        </div>
+      ) : showNew ? (
+        <div style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: 10, background: '#fffbeb' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>New {mode === 'sell' ? 'Buyer' : 'Owner'} Details</span>
+            <button onClick={() => { setShowNew(false); setNewData({ salutation: '', first_name: '', surname: '', address_line1: '', address_line2: '', address_line3: '', postcode: '', phone: '', email: '' }); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <PostcodeLookup type="customer" label="Find by postcode" compact selected={null}
+              onSelect={(c) => { onSelect(c as Customer); setShowNew(false); setNewData({ salutation: '', first_name: '', surname: '', address_line1: '', address_line2: '', address_line3: '', postcode: '', phone: '', email: '' }); }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: 6, marginBottom: 6 }}>
+            <select value={newData.salutation} onChange={e => setNewData({ ...newData, salutation: e.target.value })}
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12 }}>
+              <option value="">Title</option>
+              {SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <input placeholder="First Name *" value={newData.first_name} onChange={e => setNewData({ ...newData, first_name: e.target.value })}
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize' }} />
+            <input placeholder="Surname *" value={newData.surname} onChange={e => setNewData({ ...newData, surname: e.target.value })}
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize' }} />
+          </div>
+          <input placeholder="Address Line 1" value={newData.address_line1} onChange={e => setNewData({ ...newData, address_line1: e.target.value })}
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
+          <input placeholder="Address Line 2" value={newData.address_line2} onChange={e => setNewData({ ...newData, address_line2: e.target.value })}
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
+          <input placeholder="Address Line 3" value={newData.address_line3} onChange={e => setNewData({ ...newData, address_line3: e.target.value })}
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 4 }}>
+            <input placeholder="Postcode" value={newData.postcode} onChange={e => setNewData({ ...newData, postcode: e.target.value.toUpperCase() })}
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'uppercase' }} />
+            <input placeholder="Phone" value={newData.phone} onChange={e => setNewData({ ...newData, phone: e.target.value })}
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12 }} />
+          </div>
+          <input placeholder="Email" value={newData.email} onChange={e => setNewData({ ...newData, email: e.target.value.toLowerCase() })}
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12 }} />
+        </div>
+      ) : (
+        <div>
+          <input value={search} placeholder="Search existing customer or leave blank..."
+            onChange={async e => {
+              const v = e.target.value;
+              setSearch(v);
+              if (v.trim().length >= 2) {
+                const res = await searchCustomers(v.trim());
+                setResults(res); setShowDropdown(true);
+              } else { setResults([]); setShowDropdown(false); }
+            }}
+            onFocus={async () => {
+              if (search.trim().length >= 2) {
+                const res = await searchCustomers(search.trim());
+                setResults(res); setShowDropdown(true);
+              }
+            }}
+            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }} />
+          {showDropdown && results.length > 0 && (
+            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, maxHeight: 160, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+              {results.map(c => (
+                <div key={c.id} onClick={() => { onSelect(c); setShowDropdown(false); setSearch(''); }}
+                  style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf4')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+                  <div style={{ fontWeight: 600 }}>{[c.salutation, c.first_name, c.surname].filter(Boolean).join(' ')}</div>
+                  <div style={{ color: '#6b7280', fontSize: 11 }}>{[c.address_line1, c.postcode].filter(Boolean).join(', ')}{c.phone ? ` · ${c.phone}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {showDropdown && results.length === 0 && search.trim().length >= 2 && (
+            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, padding: 10, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>No customers found</div>
+            </div>
+          )}
+          <button onClick={() => setShowNew(true)}
+            style={{ marginTop: 6, fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+            ➕ Add New {mode === 'sell' ? 'Buyer' : 'Owner'}
+          </button>
+        </div>
+      )}
+    </div>
+  ));
+
 export function Bullion({ user }: Props) {
   const [items, setItems] = useState<BullionItem[]>([]);
   const [summary, setSummary] = useState<any>(null);
@@ -712,109 +818,6 @@ print("OK")
   };
 
   // Customer picker component for sell and valuation
-  const CustomerPicker = ({ mode, selected, onSelect, search, setSearch, results, setResults, showDropdown, setShowDropdown, showNew, setShowNew, newData, setNewData }: {
-    mode: string; selected: Customer | null; onSelect: (c: Customer | null) => void;
-    search: string; setSearch: (s: string) => void; results: Customer[]; setResults: (r: Customer[]) => void;
-    showDropdown: boolean; setShowDropdown: (b: boolean) => void;
-    showNew: boolean; setShowNew: (b: boolean) => void;
-    newData: typeof newCust; setNewData: (d: typeof newCust) => void;
-  }) => (
-    <div style={{ position: 'relative' }}>
-      {selected ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', background: '#f0fdf4' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {[selected.salutation, selected.first_name, selected.surname].filter(Boolean).join(' ')}
-            </div>
-            <div style={{ fontSize: 11, color: '#6b7280' }}>
-              {[selected.address_line1, selected.postcode].filter(Boolean).join(', ')}
-              {selected.phone ? ` · ${selected.phone}` : ''}
-            </div>
-          </div>
-          <button onClick={() => { onSelect(null); setSearch(''); setResults([]); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>✕</button>
-        </div>
-      ) : showNew ? (
-        <div style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: 10, background: '#fffbeb' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>New {mode === 'sell' ? 'Buyer' : 'Owner'} Details</span>
-            <button onClick={() => { setShowNew(false); setNewData({ salutation: '', first_name: '', surname: '', address_line1: '', address_line2: '', address_line3: '', postcode: '', phone: '', email: '' }); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <PostcodeLookup type="customer" label="Find by postcode" compact selected={null}
-              onSelect={(c) => { onSelect(c as Customer); setShowNew(false); setNewData({ salutation: '', first_name: '', surname: '', address_line1: '', address_line2: '', address_line3: '', postcode: '', phone: '', email: '' }); }} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: 6, marginBottom: 6 }}>
-            <select value={newData.salutation} onChange={e => setNewData({ ...newData, salutation: e.target.value })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12 }}>
-              <option value="">Title</option>
-              {SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <input placeholder="First Name *" value={newData.first_name} onChange={e => setNewData({ ...newData, first_name: e.target.value })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize' }} />
-            <input placeholder="Surname *" value={newData.surname} onChange={e => setNewData({ ...newData, surname: e.target.value })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize' }} />
-          </div>
-          <input placeholder="Address Line 1" value={newData.address_line1} onChange={e => setNewData({ ...newData, address_line1: e.target.value })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
-          <input placeholder="Address Line 2" value={newData.address_line2} onChange={e => setNewData({ ...newData, address_line2: e.target.value })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
-          <input placeholder="Address Line 3" value={newData.address_line3} onChange={e => setNewData({ ...newData, address_line3: e.target.value })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 4 }}>
-            <input placeholder="Postcode" value={newData.postcode} onChange={e => setNewData({ ...newData, postcode: e.target.value.toUpperCase() })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'uppercase' }} />
-            <input placeholder="Phone" value={newData.phone} onChange={e => setNewData({ ...newData, phone: e.target.value })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12 }} />
-          </div>
-          <input placeholder="Email" value={newData.email} onChange={e => setNewData({ ...newData, email: e.target.value.toLowerCase() })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12 }} />
-        </div>
-      ) : (
-        <div>
-          <input value={search} placeholder="Search existing customer or leave blank..."
-            onChange={async e => {
-              const v = e.target.value;
-              setSearch(v);
-              if (v.trim().length >= 2) {
-                const res = await searchCustomers(v.trim());
-                setResults(res); setShowDropdown(true);
-              } else { setResults([]); setShowDropdown(false); }
-            }}
-            onFocus={async () => {
-              if (search.trim().length >= 2) {
-                const res = await searchCustomers(search.trim());
-                setResults(res); setShowDropdown(true);
-              }
-            }}
-            style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }} />
-          {showDropdown && results.length > 0 && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, maxHeight: 160, overflowY: 'auto', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-              {results.map(c => (
-                <div key={c.id} onClick={() => { onSelect(c); setShowDropdown(false); setSearch(''); }}
-                  style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f0fdf4')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                  <div style={{ fontWeight: 600 }}>{[c.salutation, c.first_name, c.surname].filter(Boolean).join(' ')}</div>
-                  <div style={{ color: '#6b7280', fontSize: 11 }}>{[c.address_line1, c.postcode].filter(Boolean).join(', ')}{c.phone ? ` · ${c.phone}` : ''}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {showDropdown && results.length === 0 && search.trim().length >= 2 && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', background: '#fff', border: '1px solid #d1d5db', borderRadius: 6, padding: 10, zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 6 }}>No customers found</div>
-            </div>
-          )}
-          <button onClick={() => setShowNew(true)}
-            style={{ marginTop: 6, fontSize: 11, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
-            ➕ Add New {mode === 'sell' ? 'Buyer' : 'Owner'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div style={{ padding: 24, maxWidth: 1200 }}>
