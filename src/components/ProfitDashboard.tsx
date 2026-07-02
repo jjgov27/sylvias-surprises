@@ -10,6 +10,7 @@ import {
   getConsignmentProfitSummary,
   getSalesSplitByDateRange,
   SalesSplit,
+  getDiscountTotalForRange,
 } from '../utils/db';
 import {
   TrendingUp,
@@ -21,6 +22,7 @@ import {
   AlertTriangle,
   Handshake,
   Package,
+  Tag,
 } from 'lucide-react';
 
 interface CategoryProfit {
@@ -62,6 +64,8 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
   const [topItems, setTopItems] = useState<TopItem[]>([]);
   const [slowStock, setSlowStock] = useState<(StockItem & { ageDays: number })[]>([]);
   const [consignmentProfits, setConsignmentProfits] = useState<ConsignmentProfit[]>([]);
+  const [discountTotal, setDiscountTotal] = useState(0);
+  const [discountCount, setDiscountCount] = useState(0);
 
   const fmt = (n: number) => `£${n.toFixed(2)}`;
   const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -70,7 +74,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
     setLoading(true);
     setError('');
     try {
-      const [salesTotals, cogs, cats, top, slow, conProfits, salesSplit] = await Promise.all([
+      const [salesTotals, cogs, cats, top, slow, conProfits, salesSplit, discountData] = await Promise.all([
         getSalesTotals(),
         getOwnedStockCOGS(),
         getOwnedStockProfitByCategory(),
@@ -78,6 +82,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         getSlowestStock(15),
         getConsignmentProfitSummary(),
         getSalesSplitByDateRange('2020-01-01', new Date().toISOString().slice(0, 10)),
+        getDiscountTotalForRange('2020-01-01', new Date().toISOString().slice(0, 10)),
       ]);
 
       setTotalRevenue(salesTotals.total_sales);
@@ -86,6 +91,8 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
       setTopItems(top);
       setConsignmentProfits(conProfits);
       setSplit(salesSplit);
+      setDiscountTotal(discountData.totalDiscount);
+      setDiscountCount(discountData.discountCount);
 
       const withAge = slow.map((s) => ({
         ...s,
@@ -199,6 +206,21 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
           </div>
         </div>
       </div>
+
+      {/* Discounts Given */}
+      {discountCount > 0 && (
+        <div className="alert bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-300">
+          <div className="flex items-center gap-3">
+            <Tag size={20} className="text-amber-600" />
+            <div>
+              <div className="font-bold text-lg text-amber-700">{fmt(discountTotal)}</div>
+              <div className="text-xs text-base-content/60">
+                Discounts Given — {discountCount} discounted sale{discountCount !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Consignment Profit by Consigner */}
       {consignmentProfits.length > 0 && (
