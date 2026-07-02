@@ -111,13 +111,13 @@ export function TakingsReport({ currentUser }: Props) {
 
       const salesMap: Record<string, {total: number; count: number}> = {};
       (paymentsRes || []).forEach((r: any) => {
-        const m = r.method || 'cash';
+        const m = (r.method || 'cash').toLowerCase();
         salesMap[m] = { total: Number(r.total) || 0, count: Number(r.count) || 0 };
       });
 
       const refundMap: Record<string, number> = {};
       (refundsRes || []).forEach((r: any) => {
-        refundMap[r.method || 'cash'] = Number(r.total) || 0;
+        refundMap[(r.method || 'cash').toLowerCase()] = Number(r.total) || 0;
       });
 
       const data: TakingsRow[] = Object.entries(salesMap).map(([method, s]) => {

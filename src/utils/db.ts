@@ -2201,7 +2201,7 @@ export async function getEbaySalesForDate(date: string): Promise<number> {
 
 export async function getCashExpensesForDate(date: string): Promise<number> {
   const rows = await window.tasklet.sqlQuery(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM sylvias_expenses WHERE expense_date = '${esc(date)}'`
+    `SELECT COALESCE(SUM(amount), 0) as total FROM sylvias_expenses WHERE expense_date = '${esc(date)}' AND LOWER(payment_method) = 'cash'`
   );
   return (rows[0] as any).total;
 }
