@@ -84,16 +84,16 @@ const CustomerPicker = React.memo(({ mode, selected, onSelect, search, setSearch
               {SALUTATIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <input placeholder="First Name *" value={newData.first_name} onChange={e => setNewData({ ...newData, first_name: e.target.value })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize' }} />
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize', minWidth: 0, boxSizing: 'border-box' as const }} />
             <input placeholder="Surname *" value={newData.surname} onChange={e => setNewData({ ...newData, surname: e.target.value })}
-              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize' }} />
+              style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'capitalize', minWidth: 0, boxSizing: 'border-box' as const }} />
           </div>
           <input placeholder="Address Line 1" value={newData.address_line1} onChange={e => setNewData({ ...newData, address_line1: e.target.value })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, boxSizing: 'border-box' as const, textTransform: 'capitalize' }} />
           <input placeholder="Address Line 2" value={newData.address_line2} onChange={e => setNewData({ ...newData, address_line2: e.target.value })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, boxSizing: 'border-box' as const, textTransform: 'capitalize' }} />
           <input placeholder="Address Line 3" value={newData.address_line3} onChange={e => setNewData({ ...newData, address_line3: e.target.value })}
-            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, textTransform: 'capitalize' }} />
+            style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, marginBottom: 4, boxSizing: 'border-box' as const, textTransform: 'capitalize' }} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 4 }}>
             <input placeholder="Postcode" value={newData.postcode} onChange={e => setNewData({ ...newData, postcode: e.target.value.toUpperCase() })}
               style={{ padding: 6, borderRadius: 4, border: '1px solid #d1d5db', fontSize: 12, textTransform: 'uppercase' }} />
@@ -507,8 +507,8 @@ c.line(col[3] - 10, y + 8, col[4], y + 8)
 y -= 10
 c.setFont("Helvetica-Bold", 13)
 c.setFillColor(colors.HexColor("#5C3D2E"))
-c.drawRightString(col[3], y, "TOTAL")
-c.drawRightString(col[4], y, "\\u00a3${item.sale_price.toFixed(2)}")
+
+c.drawRightString(col[4], y, "TOTAL: \\u00a3${item.sale_price.toFixed(2)}")
 
 y -= 35
 c.setFillColor(colors.HexColor("#F5EDE3"))
