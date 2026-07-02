@@ -3112,3 +3112,17 @@ export async function editSaleTotalWithAudit(saleId: number, newTotal: number, p
     `UPDATE sylvias_sales SET total = ${newTotal}, amount_paid = ${totalPaid}, balance_due = ${balanceDue}, status = '${status}' WHERE id = ${saleId}`
   );
 }
+
+export async function getStockRetailTotal(): Promise<number> {
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(rrp * qty), 0) as total_retail FROM sylvias_stock WHERE qty > 0`
+  );
+  return (rows[0] as unknown as {total_retail: number}).total_retail;
+}
+
+export async function getStockCategorySummary(): Promise<{category: string; item_count: number; total_units: number; cost_value: number; retail_value: number}[]> {
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT category, COUNT(*) as item_count, COALESCE(SUM(qty), 0) as total_units, COALESCE(SUM(cost * qty), 0) as cost_value, COALESCE(SUM(rrp * qty), 0) as retail_value FROM sylvias_stock WHERE qty > 0 GROUP BY category ORDER BY cost_value DESC`
+  );
+  return rows as unknown as {category: string; item_count: number; total_units: number; cost_value: number; retail_value: number}[];
+}

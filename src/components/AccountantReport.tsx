@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StaffUser } from '../types';
 import {
-  getSalesTotals, getExpensesTotals, getStockCostTotal,
+  getSalesTotals, getExpensesTotals, getStockCostTotal, getStockRetailTotal,
   getExpensesByCategory, getSalesByMonth, getSalesByPaymentMethod,
   getCostOfGoodsSold,
   getSalesTotalsByRange, getExpensesTotalsByRange, getCogsByRange,
@@ -88,6 +88,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const [salesTotals, setSalesTotals] = useState({ total_sales: 0, sale_count: 0 });
   const [expTotals, setExpTotals] = useState({ total_expenses: 0, expense_count: 0 });
   const [stockCost, setStockCost] = useState(0);
+  const [stockRetail, setStockRetail] = useState(0);
   const [supplierDebt, setSupplierDebt] = useState(0);
   const [cogs, setCogs] = useState(0);
   const [bullionCogs, setBullionCogs] = useState(0);
@@ -190,8 +191,9 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
       setDateLabel('All Time'); setPriorLabel('');
     }
 
-    const [sc, supTotals] = await Promise.all([getStockCostTotal(), getSupplierInvoicesTotals()]);
+    const [sc, sr, supTotals] = await Promise.all([getStockCostTotal(), getStockRetailTotal(), getSupplierInvoicesTotals()]);
     setStockCost(sc);
+    setStockRetail(sr);
     setSupplierDebt(supTotals.total_owed);
     setLoading(false);
   }
@@ -290,6 +292,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         salesByPayment: salesByPM.map(p => ({ method: p.method, total: p.total, count: p.count })),
 
         stockValueAtCost: stockCost,
+        stockValueAtRetail: stockRetail,
         hasPrior: !!prior,
       };
 
@@ -873,8 +876,9 @@ print('OK')
       {/* Assets & Liabilities */}
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="stat bg-base-200 rounded-lg p-3 inline-block">
-          <div className="stat-title text-xs flex items-center gap-1"><Package size={14} /> Stock Value (asset)</div>
+          <div className="stat-title text-xs flex items-center gap-1"><Package size={14} /> Stock Value (at cost)</div>
           <div className="stat-value text-lg">{fmt(stockCost)}</div>
+          <div className="text-xs text-base-content/60 mt-1">Retail value: {fmt(stockRetail)}</div>
         </div>
         {supplierDebt > 0 && (
           <div className="stat bg-error/10 rounded-lg p-3 inline-block border border-error/30">

@@ -42,6 +42,7 @@ import { ScanReview } from './components/ScanReview';
 import { EbayExport } from './components/EbayExport';
 import { StockCheck } from './components/StockCheck';
 import BulkStockEntry from './components/BulkStockEntry';
+import { StockValuation } from './components/StockValuation';
 import {
   Package, PlusCircle, LogOut, Store, ShoppingCart, Receipt, Users, BookOpen, Wallet,
   BarChart3, Banknote, Handshake, Bookmark, Heart, Truck, Tag, TrendingUp, ChevronDown,
@@ -111,6 +112,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'profit-dashboard', label: 'Profit Dashboard', icon: <TrendingUp size={18} /> },
       { id: 'pnl-report', label: 'Profit & Loss', icon: <BarChart3 size={16} /> },
       { id: 'bank-reconciliation', label: 'Bank Reconciliation', icon: <Building2 size={16} /> },
+      { id: 'stock-valuation', label: 'Stock Valuation', icon: <PoundSterling size={18} /> },
       { id: 'accountant-report', label: 'Accountant Report', icon: <BarChart3 size={16} /> },
       { id: 'event-tracker', label: 'Event Tracker', icon: <CalendarDays size={18} /> },
       { id: 'insurance-register', label: 'Insurance Register', icon: <Shield size={18} /> },
@@ -318,6 +320,7 @@ export default function App() {
     { id: 'scan-review' as ViewMode, label: 'Scan Review', desc: 'Check scanned items', icon: <ScanLine size={36} />, color: 'from-orange-500 to-orange-600' },
     { id: 'sell' as ViewMode, label: 'Sell', desc: 'Point of sale', icon: <ShoppingCart size={36} />, color: 'from-amber-500 to-amber-700' },
     { id: 'cashup' as ViewMode, label: 'End of Day', desc: 'Cash-up & close', icon: <Calculator size={36} />, color: 'from-purple-500 to-purple-700' },
+    { id: 'stock-valuation' as ViewMode, label: 'Stock Valuation', desc: 'Total stock value', icon: <PoundSterling size={36} />, color: 'from-green-500 to-green-700' },
     { id: 'bullion' as ViewMode, label: 'Bullion', desc: 'Gold & silver tracker', icon: <Coins size={36} />, color: 'from-yellow-500 to-yellow-700' },
     { id: 'sales-ledger' as ViewMode, label: 'Sales Ledger', desc: 'All transactions', icon: <BookOpen size={36} />, color: 'from-rose-500 to-rose-700' },
     { id: 'customers' as ViewMode, label: 'Customers', desc: 'Customer database', icon: <Users size={36} />, color: 'from-cyan-500 to-cyan-700' },
@@ -851,6 +854,8 @@ export default function App() {
           <GiftVouchers currentUser={currentUser} />
         ) : view === 'stock-check' ? (
           <StockCheck currentUser={currentUser} />
+        ) : view === 'stock-valuation' ? (
+          <StockValuation currentUser={currentUser} />
         ) : view === 'ebay-export' ? (
           <EbayExport currentUser={currentUser} />
         ) : (
