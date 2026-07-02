@@ -2220,7 +2220,7 @@ export async function getAllSalesByMethodForDate(date: string): Promise<Record<s
     `SELECT payment_method, COALESCE(SUM(amount), 0) as total FROM sylvias_payments WHERE date(payment_date) = '${esc(date)}' GROUP BY payment_method`
   );
   const result: Record<string, number> = {};
-  (rows || []).forEach((r: any) => { result[r.payment_method || 'cash'] = Number(r.total) || 0; });
+  (rows || []).forEach((r: any) => { result[(r.payment_method || 'cash').toLowerCase()] = Number(r.total) || 0; });
   return result;
 }
 
@@ -2229,7 +2229,7 @@ export async function getAllExpensesByMethodForDate(date: string): Promise<Recor
     `SELECT payment_method, COALESCE(SUM(amount), 0) as total FROM sylvias_expenses WHERE expense_date = '${esc(date)}' GROUP BY payment_method`
   );
   const result: Record<string, number> = {};
-  (rows || []).forEach((r: any) => { result[r.payment_method || 'cash'] = Number(r.total) || 0; });
+  (rows || []).forEach((r: any) => { result[(r.payment_method || 'cash').toLowerCase()] = Number(r.total) || 0; });
   return result;
 }
 
@@ -2238,7 +2238,7 @@ export async function getAllRefundsByMethodForDate(date: string): Promise<Record
     `SELECT COALESCE(refund_method, 'cash') as method, COALESCE(SUM(amount), 0) as total FROM sylvias_refunds WHERE refund_date = '${esc(date)}' GROUP BY refund_method`
   );
   const result: Record<string, number> = {};
-  (rows || []).forEach((r: any) => { result[r.method || 'cash'] = Number(r.total) || 0; });
+  (rows || []).forEach((r: any) => { result[(r.method || 'cash').toLowerCase()] = Number(r.total) || 0; });
   return result;
 }
 
@@ -2267,7 +2267,7 @@ export async function getInvoicePaymentsByMethodForDate(date: string): Promise<R
     `SELECT payment_method, COALESCE(SUM(amount), 0) as total FROM sylvias_payments WHERE date(payment_date) = '${esc(date)}' GROUP BY payment_method`
   );
   const result: Record<string, number> = {};
-  (rows || []).forEach((r: any) => { result[r.payment_method || 'cash'] = Number(r.total) || 0; });
+  (rows || []).forEach((r: any) => { result[(r.payment_method || 'cash').toLowerCase()] = Number(r.total) || 0; });
   return result;
 }
 
