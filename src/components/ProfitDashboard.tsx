@@ -11,6 +11,7 @@ import {
   getSalesSplitByDateRange,
   SalesSplit,
   getDiscountTotalForRange,
+  getStockHolding,
 } from '../utils/db';
 import {
   TrendingUp,
@@ -66,6 +67,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
   const [consignmentProfits, setConsignmentProfits] = useState<ConsignmentProfit[]>([]);
   const [discountTotal, setDiscountTotal] = useState(0);
   const [discountCount, setDiscountCount] = useState(0);
+  const [stockHolding, setStockHolding] = useState<{items: number; units: number; costValue: number; retailValue: number}>({items:0,units:0,costValue:0,retailValue:0});
 
   const fmt = (n: number) => `£${n.toFixed(2)}`;
   const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -97,6 +99,12 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         setDiscountTotal(discountData.totalDiscount);
         setDiscountCount(discountData.discountCount);
       } catch(e) { console.error('Discount fetch error:', e); }
+
+      // Fetch current stock holding
+      try {
+        const holdingData = await getStockHolding();
+        setStockHolding(holdingData);
+      } catch(e) { console.error('Stock holding fetch error:', e); }
 
       const withAge = slow.map((s) => ({
         ...s,
@@ -210,6 +218,36 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
           </div>
         </div>
       </div>
+
+      {/* Current Stock Holding */}
+      {stockHolding.items > 0 && (
+        <div className="alert bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-300">
+          <div className="flex items-center gap-3 w-full">
+            <Package size={20} className="text-blue-600" />
+            <div className="flex-1">
+              <div className="font-bold text-lg text-blue-700">Present Stock Holding</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+                <div>
+                  <div className="text-xs text-base-content/60">Items</div>
+                  <div className="font-semibold text-blue-700">{stockHolding.items}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Total Units</div>
+                  <div className="font-semibold text-blue-700">{stockHolding.units}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Cost Value</div>
+                  <div className="font-semibold text-blue-700">{fmt(stockHolding.costValue)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Retail Value</div>
+                  <div className="font-semibold text-blue-700">{fmt(stockHolding.retailValue)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Discounts Given */}
       {discountCount > 0 && (

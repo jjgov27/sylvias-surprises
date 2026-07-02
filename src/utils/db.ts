@@ -3126,3 +3126,17 @@ export async function getStockCategorySummary(): Promise<{category: string; item
   );
   return rows as unknown as {category: string; item_count: number; total_units: number; cost_value: number; retail_value: number}[];
 }
+
+// Stock holding summary
+export async function getStockHolding(): Promise<{items: number; units: number; costValue: number; retailValue: number}> {
+  const rows: any[] = await sqlQuery("SELECT COUNT(*) as items, SUM(qty) as units, SUM(cost * qty) as cost_value, SUM(rrp * qty) as retail_value FROM sylvias_stock WHERE qty > 0");
+  if (rows.length > 0) {
+    return {
+      items: rows[0].items || 0,
+      units: rows[0].units || 0,
+      costValue: rows[0].cost_value || 0,
+      retailValue: rows[0].retail_value || 0,
+    };
+  }
+  return {items: 0, units: 0, costValue: 0, retailValue: 0};
+}
