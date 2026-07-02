@@ -47,7 +47,7 @@ import {
   Package, PlusCircle, LogOut, Store, ShoppingCart, Receipt, Users, BookOpen, Wallet,
   BarChart3, Banknote, Handshake, Bookmark, Heart, Truck, Tag, TrendingUp, ChevronDown,
   ChevronRight, Star, Menu, X, Coins, Settings, Clock, RotateCcw, FileText, Building2, Calculator, ShoppingBag, DollarSign,
-  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical, Layers,
+  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical, Layers, PoundSterling,
 } from 'lucide-react';
 import { getSetting, setSetting } from './utils/db';
 
