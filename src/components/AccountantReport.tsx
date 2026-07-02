@@ -890,6 +890,13 @@ print('OK')
           <div className="stat-title text-xs">Net Stock Position</div>
           <div className={`stat-value text-lg ${stockCost - supplierDebt >= 0 ? 'text-success' : 'text-error'}`}>{fmt(stockCost - supplierDebt)}</div>
         </div>
+        {discountInfo.totalDiscount > 0 && (
+          <div className="stat bg-warning/10 rounded-lg p-3 inline-block border border-warning/30">
+            <div className="stat-title text-xs flex items-center gap-1 text-warning">🏷️ Discounts Given</div>
+            <div className="stat-value text-lg text-warning">{fmt(discountInfo.totalDiscount)}</div>
+            <div className="text-xs text-base-content/60 mt-1">{discountInfo.discountCount} discounted sale{discountInfo.discountCount !== 1 ? 's' : ''} in period</div>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
