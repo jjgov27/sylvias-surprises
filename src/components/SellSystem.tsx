@@ -864,7 +864,7 @@ export function SellSystem({ currentUser, onSaleComplete, resetKey }: Props) {
               {/* Three clear sale action buttons */}
               <div className="mt-4 flex gap-2 flex-wrap">
                 <button
-                  className="btn btn-success btn-lg gap-2 flex-1"
+                  className="btn btn-success btn-lg gap-2 flex-1 whitespace-normal text-center min-h-[4rem] h-auto py-2"
                   onClick={() => {
                     if (discountEnabled && discountValue <= 0) {
                       alert('Please enter a discount amount');

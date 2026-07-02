@@ -212,12 +212,12 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
       </div>
 
       {/* Discounts Given */}
-      {true && (
-        <div className="alert bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-300">
+      {discountCount > 0 && (
+        <div className="alert bg-gradient-to-r from-pink-50 to-pink-100 border border-pink-300">
           <div className="flex items-center gap-3">
-            <Tag size={20} className="text-amber-600" />
+            <Tag size={20} className="text-pink-600" />
             <div>
-              <div className="font-bold text-lg text-amber-700">{fmt(discountTotal)}</div>
+              <div className="font-bold text-lg text-pink-700">{fmt(discountTotal)}</div>
               <div className="text-xs text-base-content/60">
                 Discounts Given — {discountCount} discounted sale{discountCount !== 1 ? 's' : ''}
               </div>
