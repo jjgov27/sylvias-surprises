@@ -74,7 +74,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
     setLoading(true);
     setError('');
     try {
-      const [salesTotals, cogs, cats, top, slow, conProfits, salesSplit, discountData] = await Promise.all([
+      const [salesTotals, cogs, cats, top, slow, conProfits, salesSplit] = await Promise.all([
         getSalesTotals(),
         getOwnedStockCOGS(),
         getOwnedStockProfitByCategory(),
@@ -82,7 +82,6 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         getSlowestStock(15),
         getConsignmentProfitSummary(),
         getSalesSplitByDateRange('2020-01-01', new Date().toISOString().slice(0, 10)),
-        getDiscountTotalForRange('2020-01-01', new Date().toISOString().slice(0, 10)),
       ]);
 
       setTotalRevenue(salesTotals.total_sales);
@@ -91,8 +90,13 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
       setTopItems(top);
       setConsignmentProfits(conProfits);
       setSplit(salesSplit);
-      setDiscountTotal(discountData.totalDiscount);
-      setDiscountCount(discountData.discountCount);
+
+      // Fetch discounts separately so it can't break the main dashboard
+      try {
+        const discountData = await getDiscountTotalForRange('2020-01-01', new Date().toISOString().slice(0, 10));
+        setDiscountTotal(discountData.totalDiscount);
+        setDiscountCount(discountData.discountCount);
+      } catch { /* discount card just won't show */ }
 
       const withAge = slow.map((s) => ({
         ...s,
