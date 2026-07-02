@@ -96,7 +96,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         const discountData = await getDiscountTotalForRange('2020-01-01', new Date().toISOString().slice(0, 10));
         setDiscountTotal(discountData.totalDiscount);
         setDiscountCount(discountData.discountCount);
-      } catch { /* discount card just won't show */ }
+      } catch(e) { console.error('Discount fetch error:', e); }
 
       const withAge = slow.map((s) => ({
         ...s,
@@ -212,7 +212,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
       </div>
 
       {/* Discounts Given */}
-      {discountCount > 0 && (
+      {true && (
         <div className="alert bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-300">
           <div className="flex items-center gap-3">
             <Tag size={20} className="text-amber-600" />
