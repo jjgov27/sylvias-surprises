@@ -207,7 +207,7 @@ export function StockRemovals({ currentUser }: Props) {
                         <div className="font-semibold">{item.description}</div>
                         <div className="text-xs text-base-content/50">
                           {item.part_number && <span className="mr-3">Part: {item.part_number}</span>}
-                          Qty: {item.qty} · £{item.rrp.toFixed(2)}
+                          Qty: {item.qty} · Cost: £{item.cost.toFixed(2)}
                         </div>
                       </div>
                       <span className="badge badge-sm">{item.qty} in stock</span>
@@ -304,7 +304,7 @@ export function StockRemovals({ currentUser }: Props) {
                     <strong>Reason:</strong> {reason}
                   </p>
                   <p className="text-sm mb-1">
-                    <strong>Retail value:</strong> £{(selectedItem.rrp * parseInt(quantity)).toFixed(2)}
+                    <strong>Cost value:</strong> £{(selectedItem.cost * parseInt(quantity)).toFixed(2)}
                   </p>
                   <p className="text-sm mb-3">
                     <strong>Authorised by:</strong> {initials.toUpperCase()}
@@ -378,7 +378,7 @@ export function StockRemovals({ currentUser }: Props) {
                       <td className="font-semibold">{r.description}</td>
                       <td className="text-xs text-base-content/50">{r.part_number || '—'}</td>
                       <td className="text-center">{r.quantity}</td>
-                      <td className="text-right">£{(r.retail_at_removal * r.quantity).toFixed(2)}</td>
+                      <td className="text-right">£{(r.cost_at_removal * r.quantity).toFixed(2)}</td>
                       <td className="text-sm max-w-[200px] truncate" title={r.reason}>{r.reason}</td>
                       <td className="font-mono text-sm">{r.initials}</td>
                     </tr>
@@ -388,7 +388,7 @@ export function StockRemovals({ currentUser }: Props) {
                   <tr className="font-bold border-t-2">
                     <td colSpan={5}>Totals</td>
                     <td className="text-right">
-                      £{recentRemovals.reduce((sum, r) => sum + r.retail_at_removal * r.quantity, 0).toFixed(2)}
+                      £{recentRemovals.reduce((sum, r) => sum + r.cost_at_removal * r.quantity, 0).toFixed(2)}
                     </td>
                     <td colSpan={2}>{recentRemovals.length} record{recentRemovals.length !== 1 ? 's' : ''}</td>
                   </tr>

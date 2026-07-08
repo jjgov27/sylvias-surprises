@@ -8,7 +8,7 @@ interface StockRemovalSummary {
   count: number;
   totalRetail: number;
   totalCost: number;
-  items: { description: string; part_number: string; quantity: number; retail: number; reason: string; initials: string }[];
+  items: { description: string; part_number: string; quantity: number; cost: number; retail: number; reason: string; initials: string }[];
 }
 
 interface Props {
@@ -70,6 +70,7 @@ export function CashUp({ currentUser }: Props) {
                 description: r.description || 'Unknown',
                 part_number: r.part_number || '',
                 quantity: r.quantity,
+                cost: r.cost_at_removal * r.quantity,
                 retail: r.retail_at_removal * r.quantity,
                 reason: r.reason,
                 initials: r.initials,
@@ -293,14 +294,14 @@ for summary in data.get('removalSummaries', []):
     emoji = '\\u26a0' if summary['type'] == 'wastage' else '\\U0001f381'
     elements.append(Spacer(1, 4))
     elements.append(Paragraph(f"{label}", heading_style))
-    elements.append(Paragraph(f"{summary['count']} item(s) - \\u00a3{summary['totalRetail']:.2f} retail value (cost: \\u00a3{summary['totalCost']:.2f})", bold_style))
-    rem_tbl = [['Item', 'Part No.', 'Qty', 'Retail', 'Reason', 'By']]
+    elements.append(Paragraph(f"{summary['count']} item(s) - \\u00a3{summary['totalCost']:.2f} cost value (retail: \\u00a3{summary['totalRetail']:.2f})", bold_style))
+    rem_tbl = [['Item', 'Part No.', 'Qty', 'Cost', 'Reason', 'By']]
     for item in summary['items']:
         rem_tbl.append([
             item['description'][:25],
             item.get('part_number', '') or '\\u2014',
             str(item['quantity']),
-            f"\\u00a3{item['retail']:.2f}",
+            f"\\u00a3{item.get('cost', 0):.2f}",
             item['reason'][:20],
             item['initials'],
         ])
@@ -553,7 +554,7 @@ with open(pdf_path, 'rb') as f:
                     {summary.type === 'wastage' ? <><Trash2 size={18} className="text-warning" /> ⚠️ Wastage</> : <><Gift size={18} className="text-info" /> 🎁 Gifts</>}
                   </h3>
                   <div className={`badge ${summary.type === 'wastage' ? 'badge-warning' : 'badge-info'} badge-lg font-bold`}>
-                    {summary.count} item{summary.count !== 1 ? 's' : ''} · £{summary.totalRetail.toFixed(2)} retail
+                    {summary.count} item{summary.count !== 1 ? 's' : ''} · £{summary.totalCost.toFixed(2)} cost
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -563,7 +564,7 @@ with open(pdf_path, 'rb') as f:
                         <th>Item</th>
                         <th>Part No.</th>
                         <th className="text-center">Qty</th>
-                        <th className="text-right">Retail</th>
+                        <th className="text-right">Cost</th>
                         <th>Reason</th>
                         <th>By</th>
                       </tr>
@@ -574,7 +575,7 @@ with open(pdf_path, 'rb') as f:
                           <td className="font-semibold">{item.description}</td>
                           <td className="text-xs text-base-content/50">{item.part_number || '—'}</td>
                           <td className="text-center">{item.quantity}</td>
-                          <td className="text-right">£{item.retail.toFixed(2)}</td>
+                          <td className="text-right">£{item.cost.toFixed(2)}</td>
                           <td className="text-sm max-w-[150px] truncate" title={item.reason}>{item.reason}</td>
                           <td className="font-mono text-xs">{item.initials}</td>
                         </tr>
@@ -583,7 +584,7 @@ with open(pdf_path, 'rb') as f:
                   </table>
                 </div>
                 <p className="text-xs text-base-content/50 mt-1">
-                  Cost value: £{summary.totalCost.toFixed(2)} · {summary.type === 'wastage' ? 'Items written off as damaged/unusable' : 'Items given away (raffle, donation, etc.)'}
+                  Retail value: £{summary.totalRetail.toFixed(2)} · {summary.type === 'wastage' ? 'Items written off as damaged/unusable' : 'Items given away (raffle, donation, etc.)'}
                 </p>
               </div>
             </div>
