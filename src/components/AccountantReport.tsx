@@ -12,6 +12,7 @@ import {
   getSupplierInvoicesTotals,
   getDiscountTotalForRange,
   getBullionCOGSByRange,
+  getStockRemovalsSummary, getStockRemovalsSummaryByRange, RemovalSummary,
 } from '../utils/db';
 import { BarChart3, TrendingUp, TrendingDown, Package, PoundSterling, Download, Calendar, FileText, Printer } from 'lucide-react';
 
@@ -116,6 +117,10 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const [priorSalesByPM, setPriorSalesByPM] = useState<{ method: string; total: number; count: number }[]>([]);
   const [priorLabel, setPriorLabel] = useState('');
 
+  // Wastage & Gifts
+  const [removals, setRemovals] = useState<RemovalSummary>({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
+  const [priorRemovals, setPriorRemovals] = useState<RemovalSummary>({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
+
   // Detail data
   // Removed: salesDetail and expenseGroups — not needed for accountant's summary
 
@@ -136,8 +141,8 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
     if (range) {
       const prior = getPriorYearRange(range.from, range.to);
 
-      const [st, et, cg, bcg, ec, em, sm, sp, splitData, discData,
-             pst, pet, pcg, pbcg, pec, psp, priorSplitData, pDiscData] = await Promise.all([
+      const [st, et, cg, bcg, ec, em, sm, sp, splitData, discData, remData,
+             pst, pet, pcg, pbcg, pec, psp, priorSplitData, pDiscData, pRemData] = await Promise.all([
         getSalesTotalsByRange(range.from, range.to),
         getExpensesTotalsByRange(range.from, range.to),
         getCogsByRange(range.from, range.to),
@@ -148,6 +153,7 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         getSalesByPaymentMethodInRange(range.from, range.to),
         getSalesSplitByDateRange(range.from, range.to),
         getDiscountTotalForRange(range.from, range.to),
+        getStockRemovalsSummaryByRange(range.from, range.to),
         // Prior year
         getSalesTotalsByRange(prior.from, prior.to),
         getExpensesTotalsByRange(prior.from, prior.to),
@@ -157,14 +163,15 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         getSalesByPaymentMethodInRange(prior.from, prior.to),
         getSalesSplitByDateRange(prior.from, prior.to),
         getDiscountTotalForRange(prior.from, prior.to),
+        getStockRemovalsSummaryByRange(prior.from, prior.to),
       ]);
 
       setSalesTotals(st); setExpTotals(et); setCogs(cg); setBullionCogs(bcg);
       setExpByCat(ec); setExpByMonth(em); setSalesByMonth(sm); setSalesByPM(sp);
-      setSplit(splitData); setDiscountInfo(discData);
+      setSplit(splitData); setDiscountInfo(discData); setRemovals(remData);
       setPriorSalesTotals(pst); setPriorExpTotals(pet); setPriorCogs(pcg); setPriorBullionCogs(pbcg);
       setPriorExpByCat(pec); setPriorSalesByPM(psp); setPriorSplit(priorSplitData);
-      setPriorDiscountInfo(pDiscData);
+      setPriorDiscountInfo(pDiscData); setPriorRemovals(pRemData);
 
       const fromLabel = formatDateLong(range.from);
       const toLabel = formatDateLong(range.to);
@@ -174,20 +181,22 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
       const priorToLabel = formatDateLong(prior.to);
       setPriorLabel(`${priorFromLabel} — ${priorToLabel}`);
     } else {
-      const [st, et, cg, bcg, ec, sm, sp, splitData, discData] = await Promise.all([
+      const [st, et, cg, bcg, ec, sm, sp, splitData, discData, remData] = await Promise.all([
         getSalesTotals(), getExpensesTotals(), getCostOfGoodsSold(),
         getBullionCOGSByRange('2000-01-01', '2099-12-31'),
         getExpensesByCategory(), getSalesByMonth(), getSalesByPaymentMethod(),
         getSalesSplitByDateRange('2000-01-01', '2099-12-31'),
         getDiscountTotalForRange('2000-01-01', '2099-12-31'),
+        getStockRemovalsSummary(),
       ]);
       setSalesTotals(st); setExpTotals(et); setCogs(cg); setBullionCogs(bcg); setExpByCat(ec);
       setExpByMonth([]); setSalesByMonth(sm); setSalesByPM(sp);
-      setSplit(splitData); setDiscountInfo(discData);
+      setSplit(splitData); setDiscountInfo(discData); setRemovals(remData);
       setPriorSalesTotals({ total_sales: 0, sale_count: 0 });
       setPriorExpTotals({ total_expenses: 0, expense_count: 0 });
       setPriorCogs(0); setPriorBullionCogs(0); setPriorExpByCat({}); setPriorSalesByPM([]);
       setPriorSplit(null); setPriorDiscountInfo({ totalDiscount: 0, discountCount: 0 });
+      setPriorRemovals({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
       setDateLabel('All Time'); setPriorLabel('');
     }
 
@@ -217,12 +226,14 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
   const totalCogs = cogs + bullionCogs;
   const stockGrossProfit = stockSalesTotal - totalCogs;
   const totalGrossProfit = stockGrossProfit + consignmentCommission;
-  const netProfit = totalGrossProfit - expTotals.total_expenses;
+  const totalRemovalsCost = removals.wastageCost + removals.giftCost;
+  const priorTotalRemovalsCost = priorRemovals.wastageCost + priorRemovals.giftCost;
+  const netProfit = totalGrossProfit - expTotals.total_expenses - totalRemovalsCost;
 
   const priorTotalCogs = priorCogs + priorBullionCogs;
   const priorStockGrossProfit = priorStockSalesTotal - priorTotalCogs;
   const priorTotalGrossProfit = priorStockGrossProfit + priorConsignmentCommission;
-  const priorNetProfit = priorTotalGrossProfit - priorExpTotals.total_expenses;
+  const priorNetProfit = priorTotalGrossProfit - priorExpTotals.total_expenses - priorTotalRemovalsCost;
 
   // Collect all expense categories across both periods
   const allExpCats = Array.from(new Set([
@@ -287,6 +298,10 @@ export const AccountantReport: React.FC<Props> = ({ currentUser }) => {
         bullionCogs: { current: bullionCogs, prior: priorBullionCogs },
         grossProfit: { current: totalGrossProfit, prior: priorTotalGrossProfit },
         netSurplus: { current: netProfit, prior: priorNetProfit },
+        removals: {
+          current: { wastageCost: removals.wastageCost, wastageQty: removals.wastageQty, giftCost: removals.giftCost, giftQty: removals.giftQty, totalCost: totalRemovalsCost },
+          prior: { wastageCost: priorRemovals.wastageCost, wastageQty: priorRemovals.wastageQty, giftCost: priorRemovals.giftCost, giftQty: priorRemovals.giftQty, totalCost: priorTotalRemovalsCost },
+        },
 
         salesByMonth: salesByMonth.map(m => ({ month: formatMonth(m.month), total: m.total, count: m.count })),
         salesByPayment: salesByPM.map(p => ({ method: p.method, total: p.total, count: p.count })),
@@ -556,6 +571,35 @@ exp_total_idx = len(ie_rows) - 1
 # Blank
 ie_rows.append(['', ''] if not has_prior else ['', '', ''])
 
+# Wastage & Gifts (stock losses)
+rem = data.get('removals', {})
+rem_cur = rem.get('current', {})
+rem_pri = rem.get('prior', {})
+rem_cur_total = rem_cur.get('totalCost', 0)
+rem_pri_total = rem_pri.get('totalCost', 0)
+if rem_cur_total > 0 or rem_pri_total > 0:
+    ie_rows.append(['Stock Losses (Wastage & Gifts)', '', ''] if has_prior else ['Stock Losses (Wastage & Gifts)', ''])
+    rem_header_idx = len(ie_rows) - 1
+    wc = rem_cur.get('wastageCost', 0)
+    wp = rem_pri.get('wastageCost', 0)
+    if wc > 0 or wp > 0:
+        wq = rem_cur.get('wastageQty', 0)
+        w_row = [f'  Wastage (at cost) - {wq} unit{"s" if wq != 1 else ""}', pounds(wc)]
+        if has_prior: w_row.append(pounds(wp))
+        ie_rows.append(w_row)
+    gc = rem_cur.get('giftCost', 0)
+    gp = rem_pri.get('giftCost', 0)
+    if gc > 0 or gp > 0:
+        gq = rem_cur.get('giftQty', 0)
+        g_row = [f'  Gifts Given (at cost) - {gq} unit{"s" if gq != 1 else ""}', pounds(gc)]
+        if has_prior: g_row.append(pounds(gp))
+        ie_rows.append(g_row)
+    rem_total_row = ['Total Stock Losses', pounds(rem_cur_total)]
+    if has_prior: rem_total_row.append(pounds(rem_pri_total))
+    ie_rows.append(rem_total_row)
+    rem_total_idx = len(ie_rows) - 1
+    ie_rows.append(['', ''] if not has_prior else ['', '', ''])
+
 # Net Surplus / Deficit
 net_current = data['netSurplus']['current']
 net_prior = data['netSurplus']['prior'] if has_prior else 0
@@ -570,10 +614,12 @@ style = header_style()
 style += [('ALIGN', (1,0), (-1,-1), 'RIGHT')]
 # Bold section headers
 for i, row in enumerate(ie_rows):
-    if row[0] in ('Stock Sales Income', 'Consignment Sales', 'Expenditure'):
+    if row[0] in ('Stock Sales Income', 'Consignment Sales', 'Expenditure', 'Stock Losses (Wastage & Gifts)'):
         style += [('FONTNAME', (0,i), (0,i), 'Helvetica-Bold')]
 style += total_row_style(stock_total_idx)
 style += total_row_style(exp_total_idx)
+if rem_cur_total > 0 or rem_pri_total > 0:
+    style += highlight_row_style(rem_total_idx, HexColor('#fff5f5'))
 style += highlight_row_style(sgp_idx, HexColor('#ebf8ff'))
 style += highlight_row_style(con_comm_idx, HexColor('#f3e8ff'))
 style += highlight_row_style(tgp_idx, HexColor('#e6fffa'))
@@ -861,6 +907,33 @@ print('OK')
                 {priorLabel && <td className="text-right">{fmt(priorExpTotals.total_expenses)}</td>}
               </tr>
               <tr><td colSpan={priorLabel ? 3 : 2}></td></tr>
+
+              {/* Wastage & Gifts */}
+              {(totalRemovalsCost > 0 || priorTotalRemovalsCost > 0) && (
+                <>
+                  <tr className="font-semibold bg-red-50"><td className="text-red-800">⚠️ Stock Losses (Wastage & Gifts)</td><td></td>{priorLabel && <td></td>}</tr>
+                  {removals.wastageCost > 0 || priorRemovals.wastageCost > 0 ? (
+                    <tr>
+                      <td className="pl-6">Wastage (at cost) — {removals.wastageQty} unit{removals.wastageQty !== 1 ? 's' : ''}</td>
+                      <td className="text-right">{fmt(removals.wastageCost)}</td>
+                      {priorLabel && <td className="text-right">{priorRemovals.wastageCost ? fmt(priorRemovals.wastageCost) : '-'}</td>}
+                    </tr>
+                  ) : null}
+                  {removals.giftCost > 0 || priorRemovals.giftCost > 0 ? (
+                    <tr>
+                      <td className="pl-6">Gifts Given (at cost) — {removals.giftQty} unit{removals.giftQty !== 1 ? 's' : ''}</td>
+                      <td className="text-right">{fmt(removals.giftCost)}</td>
+                      {priorLabel && <td className="text-right">{priorRemovals.giftCost ? fmt(priorRemovals.giftCost) : '-'}</td>}
+                    </tr>
+                  ) : null}
+                  <tr className="font-bold bg-red-50">
+                    <td className="text-red-800">Total Stock Losses</td>
+                    <td className="text-right text-red-700">{fmt(totalRemovalsCost)}</td>
+                    {priorLabel && <td className="text-right">{fmt(priorTotalRemovalsCost)}</td>}
+                  </tr>
+                  <tr><td colSpan={priorLabel ? 3 : 2}></td></tr>
+                </>
+              )}
 
               {/* Net */}
               <tr className={`font-bold ${netProfit >= 0 ? 'bg-success/10' : 'bg-error/10'}`}>

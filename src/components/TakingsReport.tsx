@@ -89,6 +89,7 @@ export function TakingsReport({ currentUser }: Props) {
   const [totalNet, setTotalNet] = useState(0);
   const [saleCount, setSaleCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [removals, setRemovals] = useState<RemovalSummary>({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,6 +150,11 @@ export function TakingsReport({ currentUser }: Props) {
       setTotalNet(tSales - tRefunds);
       const totalTxCount = data.reduce((s, r) => s + r.count, 0);
       setSaleCount(totalTxCount);
+      // Wastage & Gifts for the period
+      try {
+        const remData = await getStockRemovalsSummaryByRange(fromDate, toDate);
+        setRemovals(remData);
+      } catch(e) { console.error('Removals fetch error:', e); }
     } catch (e) {
       console.error('TakingsReport load error', e);
     }
@@ -289,6 +295,37 @@ export function TakingsReport({ currentUser }: Props) {
               )}
             </table>
           </div>
+
+          {/* Wastage & Gifts for period */}
+          {(removals.wastageCost > 0 || removals.giftCost > 0) && (
+            <div className="bg-base-100 rounded-xl border border-base-300 overflow-hidden mb-6">
+              <div className="bg-red-50 px-4 py-2 border-b border-red-200">
+                <h3 className="font-bold text-sm text-red-800 flex items-center gap-2">
+                  <Trash2 size={16} /> Stock Losses in Period
+                </h3>
+              </div>
+              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {removals.wastageCost > 0 && (
+                  <div className="bg-red-50/50 rounded-lg p-3 border border-red-200 flex items-center gap-3">
+                    <Trash2 size={20} className="text-red-500" />
+                    <div>
+                      <div className="font-bold text-red-700">£{removals.wastageCost.toFixed(2)}</div>
+                      <div className="text-xs text-red-600">Wastage — {removals.wastageQty} unit{removals.wastageQty !== 1 ? 's' : ''} (at cost)</div>
+                    </div>
+                  </div>
+                )}
+                {removals.giftCost > 0 && (
+                  <div className="bg-indigo-50/50 rounded-lg p-3 border border-indigo-200 flex items-center gap-3">
+                    <Gift size={20} className="text-indigo-500" />
+                    <div>
+                      <div className="font-bold text-indigo-700">£{removals.giftCost.toFixed(2)}</div>
+                      <div className="text-xs text-indigo-600">Gifts — {removals.giftQty} unit{removals.giftQty !== 1 ? 's' : ''} (at cost)</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Per-method reconciliation helper */}
           {rows.length > 0 && (

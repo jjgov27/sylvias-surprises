@@ -3157,3 +3157,48 @@ export async function getBullionHeld(): Promise<{items: number; totalCost: numbe
   const rows: any[] = await window.tasklet.sqlQuery("SELECT COUNT(*) as items, COALESCE(SUM(purchase_price + premium_paid), 0) as totalCost FROM sylvias_bullion WHERE status = 'held'");
   return { items: rows[0]?.items || 0, totalCost: rows[0]?.totalCost || 0 };
 }
+
+// Stock removals (wastage & gifts) summary — all time
+export interface RemovalSummary {
+  wastageCount: number;
+  wastageQty: number;
+  wastageCost: number;
+  wastageRetail: number;
+  giftCount: number;
+  giftQty: number;
+  giftCost: number;
+  giftRetail: number;
+}
+
+export async function getStockRemovalsSummary(): Promise<RemovalSummary> {
+  const rows: any[] = await window.tasklet.sqlQuery(
+    `SELECT type, COUNT(*) as cnt, COALESCE(SUM(quantity), 0) as qty,
+            COALESCE(SUM(cost_at_removal * quantity), 0) as cost,
+            COALESCE(SUM(retail_at_removal * quantity), 0) as retail
+     FROM sylvias_stock_removals GROUP BY type`
+  );
+  const result: RemovalSummary = { wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 };
+  for (const r of rows) {
+    if (r.type === 'wastage') { result.wastageCount = r.cnt; result.wastageQty = r.qty; result.wastageCost = r.cost; result.wastageRetail = r.retail; }
+    if (r.type === 'gift') { result.giftCount = r.cnt; result.giftQty = r.qty; result.giftCost = r.cost; result.giftRetail = r.retail; }
+  }
+  return result;
+}
+
+// Stock removals summary — by date range
+export async function getStockRemovalsSummaryByRange(from: string, to: string): Promise<RemovalSummary> {
+  const rows: any[] = await window.tasklet.sqlQuery(
+    `SELECT type, COUNT(*) as cnt, COALESCE(SUM(quantity), 0) as qty,
+            COALESCE(SUM(cost_at_removal * quantity), 0) as cost,
+            COALESCE(SUM(retail_at_removal * quantity), 0) as retail
+     FROM sylvias_stock_removals
+     WHERE date(created_at) >= date('${esc(from)}') AND date(created_at) <= date('${esc(to)}')
+     GROUP BY type`
+  );
+  const result: RemovalSummary = { wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 };
+  for (const r of rows) {
+    if (r.type === 'wastage') { result.wastageCount = r.cnt; result.wastageQty = r.qty; result.wastageCost = r.cost; result.wastageRetail = r.retail; }
+    if (r.type === 'gift') { result.giftCount = r.cnt; result.giftQty = r.qty; result.giftCost = r.cost; result.giftRetail = r.retail; }
+  }
+  return result;
+}

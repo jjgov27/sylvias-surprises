@@ -12,6 +12,7 @@ import {
   SalesSplit,
   getDiscountTotalForRange,
   getStockHolding, getBullionHeld,
+  getStockRemovalsSummary, RemovalSummary,
 } from '../utils/db';
 import {
   TrendingUp,
@@ -24,6 +25,8 @@ import {
   Handshake,
   Package,
   Tag,
+  Trash2,
+  Gift,
 } from 'lucide-react';
 
 interface CategoryProfit {
@@ -69,6 +72,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
   const [discountCount, setDiscountCount] = useState(0);
   const [bullionHeld, setBullionHeld] = useState<{items: number; totalCost: number}>({items:0,totalCost:0});
   const [stockHolding, setStockHolding] = useState<{items: number; units: number; costValue: number; retailValue: number}>({items:0,units:0,costValue:0,retailValue:0});
+  const [removals, setRemovals] = useState<RemovalSummary>({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
 
   const fmt = (n: number) => `£${n.toFixed(2)}`;
   const pct = (n: number) => `${n.toFixed(1)}%`;
@@ -112,6 +116,12 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         const bullionData = await getBullionHeld();
         setBullionHeld(bullionData);
       } catch(e) { console.error("Bullion held fetch error:", e); }
+
+      // Fetch wastage & gifts
+      try {
+        const removalData = await getStockRemovalsSummary();
+        setRemovals(removalData);
+      } catch(e) { console.error("Removals fetch error:", e); }
 
       const withAge = slow.map((s) => ({
         ...s,
@@ -287,6 +297,38 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
               <div className="font-bold text-lg text-pink-700">{fmt(discountTotal)}</div>
               <div className="text-xs text-base-content/60">
                 Discounts Given — {discountCount} discounted sale{discountCount !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wastage Losses */}
+      {removals.wastageCost > 0 && (
+        <div className="alert bg-gradient-to-r from-red-50 to-red-100 border border-red-300">
+          <div className="flex items-center gap-3">
+            <Trash2 size={20} className="text-red-600" />
+            <div>
+              <div className="font-bold text-lg text-red-700">{fmt(removals.wastageCost)}</div>
+              <div className="text-xs text-base-content/60">
+                Wastage Losses (at cost) — {removals.wastageQty} unit{removals.wastageQty !== 1 ? 's' : ''} across {removals.wastageCount} record{removals.wastageCount !== 1 ? 's' : ''}
+                <span className="ml-2 text-base-content/40">(retail value: {fmt(removals.wastageRetail)})</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gifts Given */}
+      {removals.giftCost > 0 && (
+        <div className="alert bg-gradient-to-r from-indigo-50 to-indigo-100 border border-indigo-300">
+          <div className="flex items-center gap-3">
+            <Gift size={20} className="text-indigo-600" />
+            <div>
+              <div className="font-bold text-lg text-indigo-700">{fmt(removals.giftCost)}</div>
+              <div className="text-xs text-base-content/60">
+                Gifts Given (at cost) — {removals.giftQty} unit{removals.giftQty !== 1 ? 's' : ''} across {removals.giftCount} record{removals.giftCount !== 1 ? 's' : ''}
+                <span className="ml-2 text-base-content/40">(retail value: {fmt(removals.giftRetail)})</span>
               </div>
             </div>
           </div>

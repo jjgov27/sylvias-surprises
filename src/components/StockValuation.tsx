@@ -37,6 +37,7 @@ export function StockValuation({ currentUser }: Props) {
   const [sortBy, setSortBy] = useState<'category' | 'cost_value' | 'retail_value' | 'margin' | 'total_units'>('cost_value');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [removals, setRemovals] = useState<RemovalSummary>({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
 
   useEffect(() => {
     loadData();
@@ -62,6 +63,12 @@ export function StockValuation({ currentUser }: Props) {
       const zeroRows = await window.tasklet.sqlQuery(
         `SELECT COUNT(*) as cnt FROM sylvias_stock WHERE qty = 0`
       ) as unknown as { cnt: number }[];
+
+      // Wastage & Gifts
+      try {
+        const remData = await getStockRemovalsSummary();
+        setRemovals(remData);
+      } catch(e) { console.error('Removals fetch error:', e); }
 
       // Bullion held
       const bullionRows = await window.tasklet.sqlQuery(
@@ -324,6 +331,49 @@ print("OK")
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center gap-2 text-sm text-gray-600">
           <span>📦</span>
           <span>{data.zeroStockCount} stock line{data.zeroStockCount !== 1 ? 's' : ''} currently at zero quantity (not included in valuation)</span>
+        </div>
+      )}
+
+      {/* Wastage & Gifts (all-time stock losses) */}
+      {(removals.wastageCost > 0 || removals.giftCost > 0) && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <h3 className="font-semibold text-red-800 mb-3 flex items-center gap-2">
+            <Trash2 size={18} className="text-red-600" />
+            Stock Losses (All Time)
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {removals.wastageCost > 0 && (
+              <>
+                <div className="bg-white rounded-lg p-3 border border-red-100">
+                  <div className="text-xs font-medium text-red-600 uppercase">Wastage (cost)</div>
+                  <div className="text-lg font-bold text-red-700 mt-1">{fmt(removals.wastageCost)}</div>
+                  <div className="text-xs text-gray-400">{removals.wastageQty} unit{removals.wastageQty !== 1 ? 's' : ''} · {removals.wastageCount} record{removals.wastageCount !== 1 ? 's' : ''}</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-red-100">
+                  <div className="text-xs font-medium text-red-400 uppercase">Wastage (retail)</div>
+                  <div className="text-lg font-bold text-red-400 mt-1">{fmt(removals.wastageRetail)}</div>
+                  <div className="text-xs text-gray-400">Retail value lost</div>
+                </div>
+              </>
+            )}
+            {removals.giftCost > 0 && (
+              <>
+                <div className="bg-white rounded-lg p-3 border border-indigo-100">
+                  <div className="text-xs font-medium text-indigo-600 uppercase">Gifts (cost)</div>
+                  <div className="text-lg font-bold text-indigo-700 mt-1">{fmt(removals.giftCost)}</div>
+                  <div className="text-xs text-gray-400">{removals.giftQty} unit{removals.giftQty !== 1 ? 's' : ''} · {removals.giftCount} record{removals.giftCount !== 1 ? 's' : ''}</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-indigo-100">
+                  <div className="text-xs font-medium text-indigo-400 uppercase">Gifts (retail)</div>
+                  <div className="text-lg font-bold text-indigo-400 mt-1">{fmt(removals.giftRetail)}</div>
+                  <div className="text-xs text-gray-400">Retail value given</div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="mt-2 text-xs text-red-600">
+            Total stock asset reduction: {fmt(removals.wastageCost + removals.giftCost)} at cost ({fmt(removals.wastageRetail + removals.giftRetail)} retail)
+          </div>
         </div>
       )}
 
