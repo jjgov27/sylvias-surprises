@@ -146,8 +146,273 @@ export function CashUp({ currentUser }: Props) {
     await load();
   }
 
-  function handlePrint() {
-    window.print();
+  async function handlePrint() {
+    const reportData = {
+      date,
+      dateFormatted: formatDate(date),
+      cashedUpBy,
+      salesByMethod: Object.fromEntries(
+        Object.entries(salesByMethod).map(([k, v]) => [k, Number(v)])
+      ),
+      refundsByMethod: Object.fromEntries(
+        Object.entries(refundsByMethod).map(([k, v]) => [k, Number(v)])
+      ),
+      expensesByMethod: Object.fromEntries(
+        Object.entries(expensesByMethod).map(([k, v]) => [k, Number(v)])
+      ),
+      totalSales,
+      totalRefunds,
+      totalExpenses,
+      discountTotal,
+      discountCount,
+      removalSummaries: removalSummaries.map(s => ({
+        type: s.type,
+        count: s.count,
+        totalRetail: s.totalRetail,
+        totalCost: s.totalCost,
+        items: s.items,
+      })),
+      openingFloat: openingVal,
+      closingFloat: closingVal,
+      expectedCash,
+      discrepancy,
+      cashSales,
+      cashRefunds,
+      cashExpenses,
+      methodConfig: METHOD_CONFIG.map(m => ({ key: m.key, label: m.label })),
+      nonIncomeKeys: NON_INCOME_METHODS,
+    };
+
+    const pyScript = `
+import json, sys
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+data = json.loads(sys.argv[1])
+pdf_path = '/tmp/cashup_report.pdf'
+doc = SimpleDocTemplate(pdf_path, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
+styles = getSampleStyleSheet()
+title_style = ParagraphStyle('Title2', parent=styles['Title'], fontSize=18, spaceAfter=4)
+heading_style = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=13, spaceBefore=12, spaceAfter=6, textColor=colors.HexColor('#1a1a2e'))
+sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=9, textColor=colors.grey)
+normal = styles['Normal']
+bold_style = ParagraphStyle('Bold', parent=normal, fontName='Helvetica-Bold')
+
+elements = []
+elements.append(Paragraph("Sylvia's Surprises", ParagraphStyle('Shop', parent=styles['Normal'], fontSize=10, textColor=colors.grey)))
+elements.append(Paragraph("End of Day Cash-Up", title_style))
+elements.append(Paragraph(f"{data['dateFormatted']}", sub_style))
+elements.append(Paragraph(f"Cashed up by: <b>{data['cashedUpBy']}</b>", normal))
+elements.append(Spacer(1, 8))
+elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e0e0e0')))
+
+# --- Day's Takings ---
+elements.append(Paragraph("Day's Takings - Full Breakdown", heading_style))
+tbl = [['Payment Method', 'Sales', 'Refunds', 'Net']]
+method_labels = {m['key']: m['label'] for m in data['methodConfig']}
+all_keys = set(list(data['salesByMethod'].keys()) + list(data['refundsByMethod'].keys()))
+non_income = data['nonIncomeKeys']
+for m in data['methodConfig']:
+    k = m['key']
+    s = data['salesByMethod'].get(k, 0)
+    r = data['refundsByMethod'].get(k, 0)
+    if s == 0 and r == 0:
+        continue
+    tbl.append([m['label'], f"\\u00a3{s:.2f}", f"-\\u00a3{r:.2f}" if r > 0 else '\\u2014', f"\\u00a3{s-r:.2f}"])
+# Any extra methods not in config
+for k in sorted(all_keys):
+    if k in method_labels:
+        continue
+    s = data['salesByMethod'].get(k, 0)
+    r = data['refundsByMethod'].get(k, 0)
+    if s == 0 and r == 0:
+        continue
+    label = k.replace('_', ' ').title()
+    if k in non_income:
+        label += ' (pre-paid)'
+    tbl.append([label, f"\\u00a3{s:.2f}", f"-\\u00a3{r:.2f}" if r > 0 else '\\u2014', f"\\u00a3{s-r:.2f}"])
+
+ts = data['totalSales']
+tr = data['totalRefunds']
+tbl.append(['Total Sales', f"\\u00a3{ts:.2f}", f"-\\u00a3{tr:.2f}" if tr > 0 else '\\u2014', f"\\u00a3{ts-tr:.2f}"])
+
+t = Table(tbl, colWidths=[55*mm, 35*mm, 35*mm, 35*mm])
+style_cmds = [
+    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, 0), (-1, -1), 9),
+    ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+    ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#cccccc')),
+    ('LINEABOVE', (0, -1), (-1, -1), 1.5, colors.HexColor('#333333')),
+    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, -1), (-1, -1), 10),
+    ('TOPPADDING', (0, 0), (-1, -1), 3),
+    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+]
+t.setStyle(TableStyle(style_cmds))
+elements.append(t)
+
+# --- Expenses ---
+te = data['totalExpenses']
+if te > 0:
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph("Expenses Paid Out", heading_style))
+    exp_tbl = [['Method', 'Amount']]
+    for method, amount in data['expensesByMethod'].items():
+        if amount > 0:
+            exp_tbl.append([method.replace('_',' ').title(), f"-\\u00a3{amount:.2f}"])
+    exp_tbl.append(['Total Expenses', f"-\\u00a3{te:.2f}"])
+    et = Table(exp_tbl, colWidths=[80*mm, 40*mm])
+    et.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fff3e0')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#cccccc')),
+        ('LINEABOVE', (0, -1), (-1, -1), 1, colors.HexColor('#333333')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (1, 1), (1, -1), colors.HexColor('#c62828')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(et)
+
+# --- Discounts ---
+if data['discountTotal'] > 0:
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph("Discounts Given", heading_style))
+    elements.append(Paragraph(f"<b>{data['discountCount']}</b> sale(s) discounted today. Total discounts: <b>\\u00a3{data['discountTotal']:.2f}</b>", normal))
+    elements.append(Paragraph("Sale totals above are after discounts (actual money received).", sub_style))
+
+# --- Wastage & Gifts ---
+for summary in data.get('removalSummaries', []):
+    label = 'Wastage' if summary['type'] == 'wastage' else 'Gifts'
+    emoji = '\\u26a0' if summary['type'] == 'wastage' else '\\U0001f381'
+    elements.append(Spacer(1, 4))
+    elements.append(Paragraph(f"{label}", heading_style))
+    elements.append(Paragraph(f"{summary['count']} item(s) - \\u00a3{summary['totalRetail']:.2f} retail value (cost: \\u00a3{summary['totalCost']:.2f})", bold_style))
+    rem_tbl = [['Item', 'Part No.', 'Qty', 'Retail', 'Reason', 'By']]
+    for item in summary['items']:
+        rem_tbl.append([
+            item['description'][:25],
+            item.get('part_number', '') or '\\u2014',
+            str(item['quantity']),
+            f"\\u00a3{item['retail']:.2f}",
+            item['reason'][:20],
+            item['initials'],
+        ])
+    rt = Table(rem_tbl, colWidths=[40*mm, 22*mm, 12*mm, 22*mm, 38*mm, 14*mm])
+    rt.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fff8e1') if summary['type'] == 'wastage' else colors.HexColor('#e3f2fd')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('ALIGN', (2, 0), (3, -1), 'CENTER'),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#cccccc')),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(rt)
+
+# --- Cash Reconciliation ---
+elements.append(Spacer(1, 6))
+elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e0e0e0')))
+elements.append(Paragraph("Cash Till Reconciliation", heading_style))
+cash_lines = [
+    ['Opening float', f"\\u00a3{data['openingFloat']:.2f}"],
+    ['+ Cash sales', f"\\u00a3{data['cashSales']:.2f}"],
+]
+if data['cashRefunds'] > 0:
+    cash_lines.append(['\\u2212 Cash refunds', f"\\u00a3{data['cashRefunds']:.2f}"])
+if data['cashExpenses'] > 0:
+    cash_lines.append(['\\u2212 Cash expenses', f"\\u00a3{data['cashExpenses']:.2f}"])
+cash_lines.append(['Expected cash', f"\\u00a3{data['expectedCash']:.2f}"])
+cash_lines.append(['Actual closing float', f"\\u00a3{data['closingFloat']:.2f}"])
+disc = data['discrepancy']
+if abs(disc) < 0.01:
+    cash_lines.append(['Discrepancy', 'BALANCED'])
+elif disc > 0:
+    cash_lines.append(['Discrepancy', f"OVER by \\u00a3{disc:.2f}"])
+else:
+    cash_lines.append(['Discrepancy', f"SHORT by \\u00a3{abs(disc):.2f}"])
+
+ct = Table(cash_lines, colWidths=[80*mm, 50*mm])
+cash_style = [
+    ('FONTSIZE', (0, 0), (-1, -1), 9),
+    ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+    ('TOPPADDING', (0, 0), (-1, -1), 2),
+    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ('LINEABOVE', (0, -3), (-1, -3), 1, colors.HexColor('#333333')),
+    ('FONTNAME', (0, -3), (-1, -3), 'Helvetica-Bold'),
+    ('LINEABOVE', (0, -1), (-1, -1), 1.5, colors.HexColor('#333333')),
+    ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+]
+if abs(disc) < 0.01:
+    cash_style.append(('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#2e7d32')))
+elif disc > 0:
+    cash_style.append(('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#e65100')))
+else:
+    cash_style.append(('TEXTCOLOR', (1, -1), (1, -1), colors.HexColor('#c62828')))
+ct.setStyle(TableStyle(cash_style))
+elements.append(ct)
+
+# --- Day's Net Position ---
+elements.append(Spacer(1, 6))
+elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#e0e0e0')))
+elements.append(Paragraph("Day's Net Position", heading_style))
+net_tbl = [
+    ['Total Takings', 'Total Expenses', 'Net for Day'],
+    [f"\\u00a3{ts - tr:.2f}", f"-\\u00a3{te:.2f}", f"\\u00a3{ts - tr - te:.2f}"],
+]
+nt = Table(net_tbl, colWidths=[50*mm, 50*mm, 50*mm])
+nt.setStyle(TableStyle([
+    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8eaf6')),
+    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, 0), (-1, -1), 10),
+    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+    ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+    ('FONTSIZE', (0, 1), (-1, 1), 14),
+    ('TEXTCOLOR', (0, 1), (0, 1), colors.HexColor('#2e7d32')),
+    ('TEXTCOLOR', (1, 1), (1, 1), colors.HexColor('#c62828')),
+    ('TEXTCOLOR', (2, 1), (2, 1), colors.HexColor('#1565c0')),
+    ('TOPPADDING', (0, 0), (-1, -1), 6),
+    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#cccccc')),
+]))
+elements.append(nt)
+
+# --- Footer ---
+elements.append(Spacer(1, 12))
+elements.append(Paragraph(f"Report generated for Sylvia's Surprises | Cashed up by: {data['cashedUpBy']}", sub_style))
+
+doc.build(elements)
+
+import base64
+with open(pdf_path, 'rb') as f:
+    print(base64.b64encode(f.read()).decode())
+`;
+
+    try {
+      const jsonStr = JSON.stringify(reportData);
+      const result = await window.tasklet.runCommand(`python3 -c ${JSON.stringify(pyScript)} ${JSON.stringify(jsonStr)}`);
+      const b64 = (result as any).log?.trim() || (result as any).stdout?.trim();
+      if (!b64) throw new Error('No PDF output');
+      const bytes = atob(b64);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob = new Blob([arr], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `CashUp-${date}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      alert('PDF generation failed. Please try again.');
+    }
   }
 
   const formatDate = (d: string) => {
