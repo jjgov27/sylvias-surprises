@@ -77,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'price-labels', label: 'Price Labels', icon: <Tag size={18} /> },
       { id: 'out-of-stock', label: 'Out of Stock', icon: <PackageX size={18} /> },
       { id: 'stock-check', label: 'Stock Check', icon: <ClipboardCheck size={18} /> },
+      { id: 'stock-removals', label: 'Wastage & Gifts', icon: <Trash2 size={18} /> },
       { id: 'bulk-stock-entry', label: 'Bulk Entry', icon: <Layers size={18} /> },
     ],
   },
