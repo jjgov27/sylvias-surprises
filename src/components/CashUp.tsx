@@ -297,13 +297,14 @@ for summary in data.get('removalSummaries', []):
     elements.append(Paragraph(f"{label}", heading_style))
     elements.append(Paragraph(f"{summary['count']} item(s) - \\u00a3{summary['totalCost']:.2f} cost value (retail: \\u00a3{summary['totalRetail']:.2f})", bold_style))
     rem_tbl = [['Item', 'Part No.', 'Qty', 'Cost', 'Reason', 'By']]
+    cell_style = ParagraphStyle('Cell', fontName='Helvetica', fontSize=8, leading=9)
     for item in summary['items']:
         rem_tbl.append([
-            item['description'][:25],
+            Paragraph(item['description'], cell_style),
             item.get('part_number', '') or '\\u2014',
             str(item['quantity']),
             f"\\u00a3{item.get('cost', 0):.2f}",
-            item['reason'][:20],
+            Paragraph(item['reason'], cell_style),
             item['initials'],
         ])
     rt = Table(rem_tbl, colWidths=[35*mm, 20*mm, 12*mm, 20*mm, 75*mm, 14*mm])
