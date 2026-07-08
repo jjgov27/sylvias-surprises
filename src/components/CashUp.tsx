@@ -306,7 +306,7 @@ for summary in data.get('removalSummaries', []):
             item['reason'][:20],
             item['initials'],
         ])
-    rt = Table(rem_tbl, colWidths=[40*mm, 22*mm, 12*mm, 22*mm, 38*mm, 14*mm])
+    rt = Table(rem_tbl, colWidths=[35*mm, 20*mm, 12*mm, 20*mm, 75*mm, 14*mm])
     rt.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#fff8e1') if summary['type'] == 'wastage' else colors.HexColor('#e3f2fd')),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
