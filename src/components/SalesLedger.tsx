@@ -488,6 +488,7 @@ print('OK')
                     <th className="w-8"></th>
                     <th>Type</th>
                     <th>Invoice #</th>
+                    <th>Part No.</th>
                     <th>Description</th>
                     <th>Customer</th>
                     <th>Payment</th>
@@ -506,6 +507,9 @@ print('OK')
                       const descSummary = saleItems.length > 0
                         ? saleItems.map(i => (i.qty > 1 ? `${i.qty}× ` : '') + i.description).join(', ')
                         : (sale.notes || '-');
+                      const partNoSummary = saleItems.length > 0
+                        ? saleItems.map(i => i.part_number).filter(Boolean).join(', ')
+                        : '';
                       const itemCount = saleItems.length;
                       const descTruncated = descSummary.length > 80 ? descSummary.slice(0, 77) + '...' : descSummary;
                       const statusBadge = sale.status === 'paid' ? 'badge-success' :
@@ -531,6 +535,9 @@ print('OK')
                               ) : (
                                 <span className="font-mono text-xs font-semibold">{sale.invoice_number || '-'}</span>
                               )}
+                            </td>
+                            <td className="font-mono text-xs" title={partNoSummary}>
+                              {partNoSummary ? (partNoSummary.length > 20 ? partNoSummary.slice(0, 18) + '…' : partNoSummary) : '—'}
                             </td>
                             <td className="text-sm" title={descSummary}>
                               <div className="flex items-center gap-1">
@@ -566,7 +573,7 @@ print('OK')
                           </tr>
                           {expandedId === key && (
                             <tr>
-                              <td colSpan={10} className="bg-base-200/50 p-3">
+                              <td colSpan={11} className="bg-base-200/50 p-3">
                                 <table className="table table-xs w-full">
                                   <thead>
                                     <tr>
@@ -619,6 +626,7 @@ print('OK')
                         <tr key={key} className="hover">
                           <td></td>
                           <td><span className="badge badge-error badge-sm gap-1"><TrendingDown size={10} /> Expense</span></td>
+                          <td>—</td>
                           <td>—</td>
                           <td className="text-sm">{exp.description}</td>
                           <td className="text-sm"><span className="badge badge-ghost badge-xs">{exp.category}</span></td>

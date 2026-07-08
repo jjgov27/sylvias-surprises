@@ -43,11 +43,13 @@ import { EbayExport } from './components/EbayExport';
 import { StockCheck } from './components/StockCheck';
 import BulkStockEntry from './components/BulkStockEntry';
 import { StockValuation } from './components/StockValuation';
+import { OutOfStock } from './components/OutOfStock';
+import { StockRemovals } from './components/StockRemovals';
 import {
   Package, PlusCircle, LogOut, Store, ShoppingCart, Receipt, Users, BookOpen, Wallet,
   BarChart3, Banknote, Handshake, Bookmark, Heart, Truck, Tag, TrendingUp, ChevronDown,
   ChevronRight, Star, Menu, X, Coins, Settings, Clock, RotateCcw, FileText, Building2, Calculator, ShoppingBag, DollarSign,
-  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical, Layers, PoundSterling,
+  Award, CalendarDays, FileCheck, Shield, Gift, ArrowUp, ArrowDown, Pencil, Minus, Plus, Type, Zap, ScanLine, ClipboardCheck, GripVertical, Layers, PoundSterling, PackageX, Trash2,
 } from 'lucide-react';
 import { getSetting, setSetting } from './utils/db';
 
@@ -73,6 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'scan-review', label: 'Scan Review', icon: <ScanLine size={18} /> },
       { id: 'purchase-stock', label: 'Purchase Stock', icon: <ShoppingBag size={18} /> },
       { id: 'price-labels', label: 'Price Labels', icon: <Tag size={18} /> },
+      { id: 'out-of-stock', label: 'Out of Stock', icon: <PackageX size={18} /> },
       { id: 'stock-check', label: 'Stock Check', icon: <ClipboardCheck size={18} /> },
       { id: 'bulk-stock-entry', label: 'Bulk Entry', icon: <Layers size={18} /> },
     ],
@@ -856,6 +859,10 @@ export default function App() {
           <StockCheck currentUser={currentUser} />
         ) : view === 'stock-valuation' ? (
           <StockValuation currentUser={currentUser} />
+        ) : view === 'stock-removals' ? (
+          <StockRemovals currentUser={currentUser} />
+        ) : view === 'out-of-stock' ? (
+          <OutOfStock currentUser={currentUser} onEdit={handleEdit} />
         ) : view === 'ebay-export' ? (
           <EbayExport currentUser={currentUser} />
         ) : (

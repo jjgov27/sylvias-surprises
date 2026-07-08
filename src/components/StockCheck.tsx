@@ -142,7 +142,7 @@ export function StockCheck({ currentUser }: Props) {
     setLoading(true);
     try {
       const items = await window.tasklet.sqlQuery(
-        `SELECT * FROM sylvias_stock WHERE location = '${esc(selectedLocation)}' AND qty > 0 ORDER BY description ASC`
+        `SELECT * FROM sylvias_stock WHERE location = '${esc(selectedLocation)}' AND qty > 0 ORDER BY part_number ASC, description ASC`
       );
       if (items.length === 0) { setMsg('No in-stock items at that location'); setLoading(false); return; }
 
@@ -206,7 +206,7 @@ export function StockCheck({ currentUser }: Props) {
     if (rows.length === 0) return;
     setCurrentCheck(rows[0] as unknown as StockCheckSession);
     const items = await window.tasklet.sqlQuery(
-      `SELECT * FROM sylvias_stock_check_items WHERE check_id = ${checkId} ORDER BY location ASC, description ASC`
+      `SELECT * FROM sylvias_stock_check_items WHERE check_id = ${checkId} ORDER BY part_number ASC, description ASC`
     );
     setCheckItems(items as unknown as StockCheckItem[]);
     setTab('active');
@@ -379,18 +379,19 @@ story.append(Spacer(1, 4*mm))
 story.append(Paragraph("Record any items not found, wrong quantity, damaged, or requiring attention below:", note_style))
 story.append(Spacer(1, 3*mm))
 
-data2 = [['Item Description', 'Part No.', 'Location', 'Expected', 'Found', 'Issue / Notes']]
+items.sort(key=lambda x: (x.get('part_number') or 'zzz', x.get('description') or ''))
+data2 = [['Part No.', 'Item Description', 'Location', 'Expected', 'Found', 'Issue / Notes']]
 for item in items:
     data2.append([
-        Paragraph(item['description'][:50], cell_style),
         Paragraph(item['part_number'] or '—', cell_style),
+        Paragraph(item['description'][:50], cell_style),
         Paragraph(item['location'] or '—', cell_style),
         str(item['expected_qty']),
         '',
         ''
     ])
 
-col_widths2 = [60*mm, 22*mm, 22*mm, 14*mm, 14*mm, 54*mm]
+col_widths2 = [22*mm, 60*mm, 22*mm, 14*mm, 14*mm, 54*mm]
 t2 = Table(data2, colWidths=col_widths2, repeatRows=1)
 t2.setStyle(TableStyle([
     ('BACKGROUND', (0, 0), (-1, 0), red),
@@ -482,7 +483,7 @@ JEOF`);
     setPdfLoading(true);
     try {
       const items = await window.tasklet.sqlQuery(
-        `SELECT * FROM sylvias_stock_check_items WHERE check_id = ${check.id} ORDER BY location ASC, description ASC`
+        `SELECT * FROM sylvias_stock_check_items WHERE check_id = ${check.id} ORDER BY part_number ASC, description ASC`
       );
       const allItems = items as unknown as StockCheckItem[];
       const missingItems = allItems.filter(i => !i.checked);
@@ -514,16 +515,16 @@ story.append(Paragraph(f"Total items checked: {check['total_items']}    Found: {
 story.append(Spacer(1, 6*mm))
 story.append(Paragraph(f"MISSING / NOT FOUND ({len(items)} item{'s' if len(items) != 1 else ''})", red_style))
 
-data = [['Item', 'Part No.', 'Location', 'Expected Qty']]
+data = [['Part No.', 'Item', 'Location', 'Expected Qty']]
 for item in items:
     data.append([
-        Paragraph(item['description'][:60], cell_style),
         item['part_number'] or chr(8212),
+        Paragraph(item['description'][:60], cell_style),
         item['location'] or chr(8212),
         str(item['expected_qty']),
     ])
 
-col_widths = [80*mm, 25*mm, 35*mm, 20*mm]
+col_widths = [25*mm, 80*mm, 35*mm, 20*mm]
 t = Table(data, colWidths=col_widths, repeatRows=1)
 t.setStyle(TableStyle([
     ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dc2626')),
@@ -817,13 +818,13 @@ JEOF`);
                   {!item.checked && isCompleted && <span className="text-error font-bold text-xs">✕</span>}
                 </div>
 
-                {/* Item details */}
+                {/* Item details — Part No first, then Description */}
                 <div className="flex-1 min-w-0">
                   <div className={`font-medium ${item.checked ? 'line-through text-base-content/50' : ''}`}>
+                    {item.part_number ? <span className="font-mono text-xs text-primary mr-2">{item.part_number}</span> : null}
                     {item.description}
                   </div>
                   <div className="text-xs text-base-content/50 flex flex-wrap gap-2">
-                    {item.part_number && <span>#{item.part_number}</span>}
                     <span>📍 {item.location || 'No location'}</span>
                     <span>Qty: <strong>{item.expected_qty}</strong></span>
                   </div>

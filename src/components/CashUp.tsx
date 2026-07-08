@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { StaffUser, FloatRecord } from '../types';
 import { getFloatByDate, saveFloat, formatPaymentMethod, getStaffUsers, getAllSalesByMethodForDate, getAllExpensesByMethodForDate, getAllRefundsByMethodForDate, getCashSalesForDate, getCashRefundsForDate, getCashExpensesForDate, getDiscountTotalForDate } from '../utils/db';
-import { Calculator, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, User, Printer } from 'lucide-react';
+import { Calculator, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, User, Printer, Trash2, Gift } from 'lucide-react';
+
+interface StockRemovalSummary {
+  type: string;
+  count: number;
+  totalRetail: number;
+  totalCost: number;
+  items: { description: string; part_number: string; quantity: number; retail: number; reason: string; initials: string }[];
+}
 
 interface Props {
   currentUser: StaffUser;
@@ -23,6 +31,7 @@ export function CashUp({ currentUser }: Props) {
   const [expensesByMethod, setExpensesByMethod] = useState<Record<string, number>>({});
   const [discountTotal, setDiscountTotal] = useState(0);
   const [discountCount, setDiscountCount] = useState(0);
+  const [removalSummaries, setRemovalSummaries] = useState<StockRemovalSummary[]>([]);
   const [existingFloat, setExistingFloat] = useState<FloatRecord | null>(null);
   const [openingFloat, setOpeningFloat] = useState('');
   const [closingFloat, setClosingFloat] = useState('');
@@ -35,13 +44,40 @@ export function CashUp({ currentUser }: Props) {
     setLoading(true);
     setSaved(false);
     try {
-      const [sales, refunds, expenses, floatRec, users, discInfo] = await Promise.all([
+      const [sales, refunds, expenses, floatRec, users, discInfo, removals] = await Promise.all([
         getAllSalesByMethodForDate(date),
         getAllRefundsByMethodForDate(date),
         getAllExpensesByMethodForDate(date),
         getFloatByDate(date),
         getStaffUsers(),
         getDiscountTotalForDate(date),
+        (async () => {
+          try {
+            const rows = await window.tasklet.sqlQuery(
+              `SELECT r.*, s.description, s.part_number FROM sylvias_stock_removals r
+               LEFT JOIN sylvias_stock s ON s.id = r.stock_id
+               WHERE date(r.created_at) = '${date}'
+               ORDER BY r.created_at DESC`
+            ) as any[];
+            const byType: Record<string, StockRemovalSummary> = {};
+            for (const r of rows) {
+              const t = r.type || 'wastage';
+              if (!byType[t]) byType[t] = { type: t, count: 0, totalRetail: 0, totalCost: 0, items: [] };
+              byType[t].count += r.quantity;
+              byType[t].totalRetail += r.retail_at_removal * r.quantity;
+              byType[t].totalCost += r.cost_at_removal * r.quantity;
+              byType[t].items.push({
+                description: r.description || 'Unknown',
+                part_number: r.part_number || '',
+                quantity: r.quantity,
+                retail: r.retail_at_removal * r.quantity,
+                reason: r.reason,
+                initials: r.initials,
+              });
+            }
+            return Object.values(byType);
+          } catch { return []; }
+        })(),
       ]);
       // getAllSalesByMethodForDate now queries sylvias_payments directly — single source of truth
       setSalesByMethod(sales);
@@ -49,6 +85,7 @@ export function CashUp({ currentUser }: Props) {
       setExpensesByMethod(expenses);
       setDiscountTotal(discInfo.totalDiscount);
       setDiscountCount(discInfo.discountCount);
+      setRemovalSummaries(removals);
       setExistingFloat(floatRec);
       setStaffList(users);
       if (floatRec) {
@@ -241,6 +278,51 @@ export function CashUp({ currentUser }: Props) {
               </div>
             </div>
           )}
+
+          {/* Wastage & Gifts */}
+          {removalSummaries.length > 0 && removalSummaries.map(summary => (
+            <div key={summary.type} className="card bg-base-200 shadow-sm mb-4">
+              <div className="card-body p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    {summary.type === 'wastage' ? <><Trash2 size={18} className="text-warning" /> ⚠️ Wastage</> : <><Gift size={18} className="text-info" /> 🎁 Gifts</>}
+                  </h3>
+                  <div className={`badge ${summary.type === 'wastage' ? 'badge-warning' : 'badge-info'} badge-lg font-bold`}>
+                    {summary.count} item{summary.count !== 1 ? 's' : ''} · £{summary.totalRetail.toFixed(2)} retail
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="table table-xs w-full">
+                    <thead>
+                      <tr className="text-xs">
+                        <th>Item</th>
+                        <th>Part No.</th>
+                        <th className="text-center">Qty</th>
+                        <th className="text-right">Retail</th>
+                        <th>Reason</th>
+                        <th>By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.items.map((item, i) => (
+                        <tr key={i}>
+                          <td className="font-semibold">{item.description}</td>
+                          <td className="text-xs text-base-content/50">{item.part_number || '—'}</td>
+                          <td className="text-center">{item.quantity}</td>
+                          <td className="text-right">£{item.retail.toFixed(2)}</td>
+                          <td className="text-sm max-w-[150px] truncate" title={item.reason}>{item.reason}</td>
+                          <td className="font-mono text-xs">{item.initials}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-base-content/50 mt-1">
+                  Cost value: £{summary.totalCost.toFixed(2)} · {summary.type === 'wastage' ? 'Items written off as damaged/unusable' : 'Items given away (raffle, donation, etc.)'}
+                </p>
+              </div>
+            </div>
+          ))}
 
           {/* Non-Cash Method Summary Cards */}
           {(salesByMethod['sumup'] || salesByMethod['bank_transfer'] || salesByMethod['ebay'] || salesByMethod['trade_in']) ? (

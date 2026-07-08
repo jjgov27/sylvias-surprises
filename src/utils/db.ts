@@ -376,6 +376,17 @@ const INIT_TABLES = [
     performed_by TEXT NOT NULL DEFAULT '',
     performed_at TEXT NOT NULL DEFAULT (datetime('now'))
   )`,
+  `CREATE TABLE IF NOT EXISTS sylvias_stock_removals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stock_id INTEGER NOT NULL,
+    type TEXT NOT NULL DEFAULT 'wastage',
+    reason TEXT NOT NULL DEFAULT '',
+    quantity INTEGER NOT NULL DEFAULT 1,
+    initials TEXT NOT NULL DEFAULT '',
+    cost_at_removal REAL NOT NULL DEFAULT 0,
+    retail_at_removal REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
   `CREATE TABLE IF NOT EXISTS sylvias_snags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Save, RotateCcw, Camera, Hash, Tag, Plus, X, ScanLine, Printer, AlertTriangle } from 'lucide-react';
 import { PostcodeLookup } from './PostcodeLookup';
 import { StockItem, StaffUser, Supplier } from '../types';
@@ -36,7 +36,31 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [allItemNames, setAllItemNames] = useState<string[]>([]);
   const descRef = useRef<HTMLInputElement>(null);
+  const partNoRef = useRef<HTMLInputElement>(null);
+  const catRef = useRef<HTMLSelectElement>(null);
+  const qtyRef = useRef<HTMLInputElement>(null);
+  const locRef = useRef<HTMLSelectElement>(null);
+  const costRef = useRef<HTMLInputElement>(null);
+  const rrpRef = useRef<HTMLInputElement>(null);
+  const photoRef = useRef<HTMLInputElement>(null);
   const [partNumberManual, setPartNumberManual] = useState(false);
+
+  /* Enter key moves focus to next field */
+  const fieldOrder = useRef<(React.RefObject<HTMLElement | null>)[]>([]);
+  useEffect(() => {
+    fieldOrder.current = [descRef, partNoRef, catRef, qtyRef, locRef, costRef, rrpRef, photoRef];
+  }, []);
+
+  const handleEnterAdvance = useCallback((e: React.KeyboardEvent, currentRef: React.RefObject<HTMLElement | null>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const idx = fieldOrder.current.indexOf(currentRef);
+      if (idx >= 0 && idx < fieldOrder.current.length - 1) {
+        const nextRef = fieldOrder.current[idx + 1];
+        nextRef?.current?.focus();
+      }
+    }
+  }, []);
 
   // Acquisition fields
   const [acquisitionType, setAcquisitionType] = useState<AcquisitionType>('existing');
@@ -371,6 +395,7 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
                 ref={descRef} type="text" className="grow"
                 value={description}
                 onChange={e => handleDescriptionChange(e.target.value)}
+                onKeyDown={e => handleEnterAdvance(e, descRef)}
                 onBlur={() => {
                   setTimeout(() => setShowSuggestions(false), 200);
                   // Duplicate detection
@@ -406,8 +431,9 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
             <label className="label"><span className="label-text font-semibold">Part Number</span></label>
             <label className="input input-bordered flex items-center gap-2">
               <Hash className="h-[1em] opacity-50" />
-              <input type="text" className="grow font-mono" value={partNumber}
+              <input ref={partNoRef} type="text" className="grow font-mono" value={partNumber}
                 onChange={e => { setPartNumber(e.target.value.toUpperCase()); setPartNumberManual(true); }}
+                onKeyDown={e => handleEnterAdvance(e, partNoRef)}
                 />
             </label>
 
@@ -416,7 +442,8 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
           {/* Category */}
           <div className="form-control">
             <label className="label"><span className="label-text font-semibold">Category</span></label>
-            <select className="select select-bordered w-full" value={category} onChange={e => handleCategoryChange(e.target.value)}>
+            <select ref={catRef} className="select select-bordered w-full" value={category} onChange={e => handleCategoryChange(e.target.value)}
+              onKeyDown={e => handleEnterAdvance(e, catRef)}>
               {dynCategories.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
