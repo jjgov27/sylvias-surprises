@@ -185,14 +185,15 @@ export function CashUp({ currentUser }: Props) {
     };
 
     const pyScript = `
-import json, sys
+import json
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-data = json.loads(sys.argv[1])
+with open('/tmp/cashup_data.json', 'r') as _f:
+    data = json.loads(_f.read())
 pdf_path = '/tmp/cashup_report.pdf'
 doc = SimpleDocTemplate(pdf_path, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm, leftMargin=15*mm, rightMargin=15*mm)
 styles = getSampleStyleSheet()
@@ -389,17 +390,18 @@ elements.append(Spacer(1, 12))
 elements.append(Paragraph(f"Report generated for Sylvia's Surprises | Cashed up by: {data['cashedUpBy']}", sub_style))
 
 doc.build(elements)
-
-import base64
-with open(pdf_path, 'rb') as f:
-    print(base64.b64encode(f.read()).decode())
+print('OK')
 `;
 
     try {
       const jsonStr = JSON.stringify(reportData);
-      const result = await window.tasklet.runCommand(`python3 -c ${JSON.stringify(pyScript)} ${JSON.stringify(jsonStr)}`);
-      const b64 = (result as any).log?.trim() || (result as any).stdout?.trim();
-      if (!b64) throw new Error('No PDF output');
+      // Write script and data to files first (avoids shell escaping issues)
+      await window.tasklet.writeFileToDisk('/tmp/cashup_gen.py', pyScript);
+      await window.tasklet.writeFileToDisk('/tmp/cashup_data.json', jsonStr);
+      const result = await window.tasklet.runCommand('cd /tmp && python3 cashup_gen.py 2>&1');
+      const b64Result = await window.tasklet.runCommand('base64 -w0 /tmp/cashup_report.pdf');
+      const b64 = (b64Result as any).log?.trim();
+      if (!b64) throw new Error('No PDF output: ' + (result as any).log);
       const bytes = atob(b64);
       const arr = new Uint8Array(bytes.length);
       for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
