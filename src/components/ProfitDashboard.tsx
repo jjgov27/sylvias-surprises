@@ -11,7 +11,7 @@ import {
   getSalesSplitByDateRange,
   SalesSplit,
   getDiscountTotalForRange,
-  getStockHolding, getBullionHeld,
+  getStockHolding, getBullionHeld, getBullionSoldProfit,
   getStockRemovalsSummary, RemovalSummary,
 } from '../utils/db';
 import {
@@ -71,6 +71,7 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
   const [discountTotal, setDiscountTotal] = useState(0);
   const [discountCount, setDiscountCount] = useState(0);
   const [bullionHeld, setBullionHeld] = useState<{items: number; totalCost: number}>({items:0,totalCost:0});
+  const [bullionSold, setBullionSold] = useState<{count: number; revenue: number; cost: number; profit: number}>({count:0,revenue:0,cost:0,profit:0});
   const [stockHolding, setStockHolding] = useState<{items: number; units: number; costValue: number; retailValue: number}>({items:0,units:0,costValue:0,retailValue:0});
   const [removals, setRemovals] = useState<RemovalSummary>({ wastageCount: 0, wastageQty: 0, wastageCost: 0, wastageRetail: 0, giftCount: 0, giftQty: 0, giftCost: 0, giftRetail: 0 });
 
@@ -116,6 +117,12 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         const bullionData = await getBullionHeld();
         setBullionHeld(bullionData);
       } catch(e) { console.error("Bullion held fetch error:", e); }
+
+      // Fetch bullion sold profit
+      try {
+        const bullionSoldData = await getBullionSoldProfit();
+        setBullionSold(bullionSoldData);
+      } catch(e) { console.error("Bullion sold profit fetch error:", e); }
 
       // Fetch wastage & gifts
       try {
@@ -288,6 +295,36 @@ export function ProfitDashboard({ currentUser }: { currentUser: StaffUser }) {
         </div>
       )}
 
+
+      {/* Bullion Sold Profit */}
+      {bullionSold.count > 0 && (
+        <div className="alert bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300">
+          <div className="flex items-center gap-3 w-full">
+            <TrendingUp size={20} className="text-green-600" />
+            <div className="flex-1">
+              <div className="font-bold text-lg text-green-700">Bullion Sold Profit</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+                <div>
+                  <div className="text-xs text-base-content/60">Items Sold</div>
+                  <div className="font-semibold text-green-700">{bullionSold.count}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Revenue</div>
+                  <div className="font-semibold text-green-700">{fmt(bullionSold.revenue)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Cost</div>
+                  <div className="font-semibold text-red-600">{fmt(bullionSold.cost)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-base-content/60">Profit</div>
+                  <div className={`font-semibold ${bullionSold.profit >= 0 ? 'text-green-700' : 'text-red-600'}`}>{fmt(bullionSold.profit)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Discounts Given */}
       {discountCount > 0 && (
         <div className="alert bg-gradient-to-r from-pink-50 to-pink-100 border border-pink-300">

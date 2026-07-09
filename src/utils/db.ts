@@ -1497,9 +1497,31 @@ export async function getTopSellingItems(limit: number = 10): Promise<{descripti
             COALESCE(SUM(si.line_total - (si.qty * s.cost)), 0) as profit
      FROM sylvias_sale_items si
      LEFT JOIN sylvias_stock s ON si.stock_id = s.id
-     GROUP BY si.stock_id ORDER BY revenue DESC LIMIT ${limit}`
+     GROUP BY si.stock_id, si.part_number ORDER BY revenue DESC LIMIT ${limit + 5}`
   );
-  return rows as unknown as any[];
+  const items = rows as unknown as any[];
+
+  // Fix bullion items: stock_id=0, part_number starts with BUL- — get cost from sylvias_bullion
+  for (const item of items) {
+    if (item.part_number && String(item.part_number).startsWith('BUL-')) {
+      try {
+        const bullionId = parseInt(String(item.part_number).replace('BUL-', ''), 10);
+        if (!isNaN(bullionId)) {
+          const bRows: any[] = await window.tasklet.sqlQuery(
+            `SELECT (purchase_price + premium_paid) as cost FROM sylvias_bullion WHERE id = ${bullionId}`
+          );
+          if (bRows.length > 0) {
+            item.cost = bRows[0].cost;
+            item.profit = item.revenue - item.cost;
+          }
+        }
+      } catch(e) { console.error('Bullion cost lookup error:', e); }
+    }
+  }
+
+  // Re-sort by revenue and limit
+  items.sort((a: any, b: any) => b.revenue - a.revenue);
+  return items.slice(0, limit);
 }
 
 export async function getSlowestStock(limit: number = 10): Promise<StockItem[]> {
@@ -1585,7 +1607,7 @@ export async function getOwnedStockProfitByCategory(): Promise<{category: string
      WHERE si.is_consignment = 0
      GROUP BY s.category ORDER BY profit DESC`
   );
-  return (rows as unknown as any[]).map(r => ({
+  const categories = (rows as unknown as any[]).map(r => ({
     category: r.category,
     revenue: r.revenue,
     cost: r.cost,
@@ -1593,6 +1615,28 @@ export async function getOwnedStockProfitByCategory(): Promise<{category: string
     margin: r.revenue > 0 ? ((r.profit / r.revenue) * 100) : 0,
     count: r.count,
   }));
+
+  // Add Bullion as a category (cost from sylvias_bullion, not sylvias_stock)
+  try {
+    const bRows: any[] = await window.tasklet.sqlQuery(
+      `SELECT COALESCE(SUM(sale_price), 0) as revenue, COALESCE(SUM(purchase_price + premium_paid), 0) as cost, COUNT(*) as count FROM sylvias_bullion WHERE status = 'sold'`
+    );
+    const b = bRows[0];
+    if (b && b.count > 0) {
+      const bProfit = b.revenue - b.cost;
+      categories.push({
+        category: 'Bullion',
+        revenue: b.revenue,
+        cost: b.cost,
+        profit: bProfit,
+        margin: b.revenue > 0 ? (bProfit / b.revenue) * 100 : 0,
+        count: b.count,
+      });
+      categories.sort((a, b) => b.profit - a.profit);
+    }
+  } catch(e) { console.error('Bullion category error:', e); }
+
+  return categories;
 }
 
 // Consignment profit summary (commission earned by consigner)
@@ -1618,7 +1662,15 @@ export async function getOwnedStockCOGS(): Promise<number> {
      JOIN sylvias_stock s ON si.stock_id = s.id
      WHERE si.is_consignment = 0`
   );
-  return (rows[0] as unknown as { cogs: number }).cogs;
+  const stockCogs = (rows[0] as unknown as { cogs: number }).cogs;
+
+  // Add bullion COGS (cost recognised when sold)
+  const bullionRows: any[] = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(purchase_price + premium_paid), 0) as cogs FROM sylvias_bullion WHERE status = 'sold'`
+  );
+  const bullionCogs = bullionRows[0]?.cogs || 0;
+
+  return stockCogs + bullionCogs;
 }
 
 export async function getOwnedStockCOGSByRange(from: string, to: string): Promise<number> {
@@ -1629,7 +1681,15 @@ export async function getOwnedStockCOGSByRange(from: string, to: string): Promis
      JOIN sylvias_sales sa ON si.sale_id = sa.id
      WHERE si.is_consignment = 0 AND date(sa.sale_date) >= '${esc(from)}' AND date(sa.sale_date) <= '${esc(to)}'`
   );
-  return (rows[0] as unknown as { cogs: number }).cogs;
+  const stockCogs = (rows[0] as unknown as { cogs: number }).cogs;
+
+  // Add bullion COGS for the period
+  const bullionRows: any[] = await window.tasklet.sqlQuery(
+    `SELECT COALESCE(SUM(purchase_price + premium_paid), 0) as cogs FROM sylvias_bullion WHERE status = 'sold' AND date(sell_date) >= '${esc(from)}' AND date(sell_date) <= '${esc(to)}'`
+  );
+  const bullionCogs = bullionRows[0]?.cogs || 0;
+
+  return stockCogs + bullionCogs;
 }
 
 // Check if a specific sale has consignment items
@@ -3153,6 +3213,15 @@ export async function getStockHolding(): Promise<{items: number; units: number; 
 }
 
 // Bullion held summary
+
+// Bullion sold profit summary for dashboard
+export async function getBullionSoldProfit(): Promise<{count: number; revenue: number; cost: number; profit: number}> {
+  const rows: any[] = await window.tasklet.sqlQuery(
+    `SELECT COUNT(*) as count, COALESCE(SUM(sale_price), 0) as revenue, COALESCE(SUM(purchase_price + premium_paid), 0) as cost FROM sylvias_bullion WHERE status = 'sold'`
+  );
+  const r = rows[0] || { count: 0, revenue: 0, cost: 0 };
+  return { count: r.count, revenue: r.revenue, cost: r.cost, profit: r.revenue - r.cost };
+}
 export async function getBullionHeld(): Promise<{items: number; totalCost: number}> {
   const rows: any[] = await window.tasklet.sqlQuery("SELECT COUNT(*) as items, COALESCE(SUM(purchase_price + premium_paid), 0) as totalCost FROM sylvias_bullion WHERE status = 'held'");
   return { items: rows[0]?.items || 0, totalCost: rows[0]?.totalCost || 0 };
