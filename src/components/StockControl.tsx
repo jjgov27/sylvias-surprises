@@ -122,9 +122,12 @@ export const StockControl: React.FC<StockControlProps> = ({ currentUser, onEdit,
       items = items.filter(i => i.category === categoryFilter);
     }
 
-    // Zero stock filter
+    // Zero stock filter: show only zero-qty when toggled, otherwise HIDE zero-qty
+    // (out-of-stock items belong in the Out of Stock pane only)
     if (showZeroOnly) {
       items = items.filter(i => i.qty === 0);
+    } else {
+      items = items.filter(i => i.qty > 0);
     }
 
     // Aging filter
