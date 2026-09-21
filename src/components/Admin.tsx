@@ -85,6 +85,7 @@ export function Admin({ currentUser }: Props) {
   // Maintenance
   const [missingPartNos, setMissingPartNos] = useState<StockItem[]>([]);
   const [maintLoading, setMaintLoading] = useState(false);
+  const [maintRan, setMaintRan] = useState(false);
 
   // Duplicate Checker
   const [dupGroups, setDupGroups] = useState<DuplicateGroup[]>([]);
@@ -458,13 +459,22 @@ export function Admin({ currentUser }: Props) {
               </div>
               <button className="btn btn-warning btn-sm" onClick={async () => {
                 setMaintLoading(true);
-                setMissingPartNos(await getStockMissingPartNumbers());
+                setMaintRan(false);
+                const items = await getStockMissingPartNumbers();
+                setMissingPartNos(items);
+                setMaintRan(true);
                 setMaintLoading(false);
               }}>
                 {maintLoading ? <span className="loading loading-spinner loading-xs" /> : null}
                 Generate Report
               </button>
             </div>
+
+            {maintRan && missingPartNos.length === 0 && (
+              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 12, textAlign: 'center', color: '#166534', fontWeight: 600, fontSize: 14 }}>
+                ✅ All stock items have part numbers — nothing to report!
+              </div>
+            )}
 
             {missingPartNos.length > 0 && (
               <div style={{ overflowX: 'auto' }}>
