@@ -45,6 +45,7 @@ import BulkStockEntry from './components/BulkStockEntry';
 import { StockValuation } from './components/StockValuation';
 import { OutOfStock } from './components/OutOfStock';
 import { StockRemovals } from './components/StockRemovals';
+import { FloatingNotepad } from './components/FloatingNotepad';
 import {
   Package, PlusCircle, LogOut, Store, ShoppingCart, Receipt, Users, BookOpen, Wallet,
   BarChart3, Banknote, Handshake, Bookmark, Heart, Truck, Tag, TrendingUp, ChevronDown,
@@ -874,6 +875,7 @@ export default function App() {
           />
         )}
       </main>
+      <FloatingNotepad />
     </div>
   );
 }
