@@ -44,6 +44,10 @@ export function SnagTracker({ currentUser }: Props) {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
 
+  // Fix snag state
+  const [fixingSnagId, setFixingSnagId] = useState<number | null>(null);
+  const [fixNote, setFixNote] = useState('');
+
   const loadSnags = useCallback(async () => {
     try {
       let where = '1=1';
@@ -89,6 +93,23 @@ export function SnagTracker({ currentUser }: Props) {
     }
   };
 
+  const handleMarkFixed = async (snagId: number) => {
+    if (!fixNote.trim()) { setErr('Please enter a fix note describing what was done'); return; }
+    setErr('');
+    try {
+      await window.tasklet.sqlExec(
+        `UPDATE sylvias_snags SET status = 'fixed', resolution = '${esc(fixNote.trim())}', updated_at = datetime('now') WHERE id = ${snagId}`
+      );
+      setSaved('Snag marked as fixed ✅');
+      setFixingSnagId(null);
+      setFixNote('');
+      loadSnags();
+      setTimeout(() => setSaved(''), 3000);
+    } catch (e: unknown) {
+      setErr('Failed to update: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
   if (loading) return <div style={{ padding: 20, textAlign: 'center', color: '#6b7280' }}>Loading snags...</div>;
 
   return (
@@ -97,7 +118,7 @@ export function SnagTracker({ currentUser }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 18, color: '#1e293b' }}>🐛 Snag Tracker</h3>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Log issues here — John will review and action via Tasklet AI</div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Log issues and mark them fixed when resolved</div>
         </div>
         <button onClick={() => { resetForm(); setShowForm(true); }}
           style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
@@ -169,7 +190,7 @@ export function SnagTracker({ currentUser }: Props) {
         </div>
       )}
 
-      {/* Snag list (read-only view) */}
+      {/* Snag list */}
       {snags.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>🎉</div>
@@ -182,6 +203,8 @@ export function SnagTracker({ currentUser }: Props) {
           {snags.map(s => {
             const p = PRIORITY_COLORS[s.priority] || PRIORITY_COLORS.medium;
             const st = STATUS_COLORS[s.status] || STATUS_COLORS.open;
+            const isActive = s.status === 'open' || s.status === 'in_progress';
+            const isFixing = fixingSnagId === s.id;
             return (
               <div key={s.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, borderLeft: `4px solid ${p.text}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -205,6 +228,37 @@ export function SnagTracker({ currentUser }: Props) {
                     <div style={{ fontSize: 13, color: '#1e40af', whiteSpace: 'pre-wrap' }}>{s.user_response}</div>
                   </div>
                 )}
+
+                {/* Mark as Fixed button — only on active snags */}
+                {isActive && !isFixing && (
+                  <div style={{ marginTop: 10 }}>
+                    <button onClick={() => { setFixingSnagId(s.id); setFixNote(''); setErr(''); }}
+                      style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                      ✅ Mark as Fixed
+                    </button>
+                  </div>
+                )}
+
+                {/* Inline fix note form */}
+                {isFixing && (
+                  <div style={{ marginTop: 10, background: '#f0fdf4', border: '2px solid #86efac', borderRadius: 10, padding: 14 }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#166534', display: 'block', marginBottom: 6 }}>✅ Fix Note — what was done?</label>
+                    <textarea value={fixNote} onChange={e => setFixNote(e.target.value)}
+                      placeholder="Describe the fix or resolution..."
+                      rows={3} style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #bbf7d0', fontSize: 14, resize: 'vertical', boxSizing: 'border-box' }} />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                      <button onClick={() => handleMarkFixed(s.id)}
+                        style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                        💾 Save & Mark Fixed
+                      </button>
+                      <button onClick={() => { setFixingSnagId(null); setFixNote(''); }}
+                        style={{ background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 18px', cursor: 'pointer', fontSize: 13 }}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
                   Reported by {s.reported_by} · {s.created_at?.replace('T', ' ').slice(0, 16)}
                   {s.updated_at !== s.created_at && ` · Updated ${s.updated_at?.replace('T', ' ').slice(0, 16)}`}
