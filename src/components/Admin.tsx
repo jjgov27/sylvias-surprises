@@ -80,7 +80,8 @@ export function Admin({ currentUser }: Props) {
   const [newCategory, setNewCategory] = useState('');
   const [newLocation, setNewLocation] = useState('');
   const [newExpenseCat, setNewExpenseCat] = useState('');
-  const [catSaved, setCatSaved] = useState('');
+  const [catSaved, setCatSaved] = useState('')
+  const [catsLoaded, setCatsLoaded] = useState(false);
 
   // Maintenance
   const [missingPartNos, setMissingPartNos] = useState<StockItem[]>([]);
@@ -117,9 +118,11 @@ export function Admin({ currentUser }: Props) {
   }, []);
 
   const loadCats = useCallback(async () => {
+    setCatsLoaded(false);
     setCategories(await getCategories());
     setLocations(await getLocations());
     setExpenseCategoriesState(await getExpenseCategories());
+    setCatsLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -356,7 +359,10 @@ export function Admin({ currentUser }: Props) {
       )}
 
       {/* ── Categories & Locations Tab ── */}
-      {tab === 'categories' && (
+      {tab === 'categories' && !catsLoaded && (
+        <div style={{ padding: 24, textAlign: 'center', color: '#6b7280' }}>Loading categories...</div>
+      )}
+      {tab === 'categories' && catsLoaded && (
         <div>
           {catSaved && <div style={{ background: '#f0fdf4', color: '#16a34a', padding: '10px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{catSaved}</div>}
 
@@ -367,9 +373,9 @@ export function Admin({ currentUser }: Props) {
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input style={{ ...inp, flex: 1, textTransform: 'capitalize' }} value={newCategory}
                   onChange={e => setNewCategory(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && newCategory.trim()) { const v = titleCase(newCategory.trim()); if (!categories.includes(v)) { const updated = [...categories, v]; setCategories(updated); saveCategories(updated); setCatSaved('Category added ✅'); setTimeout(() => setCatSaved(''), 2000); } setNewCategory(''); }}}
+                  onKeyDown={e => { if (e.key === 'Enter' && newCategory.trim() && catsLoaded) { const v = titleCase(newCategory.trim()); if (!categories.includes(v)) { const updated = [...categories, v]; setCategories(updated); saveCategories(updated); setCatSaved('Category added ✅'); setTimeout(() => setCatSaved(''), 2000); } setNewCategory(''); }}}
                   placeholder="New category..." />
-                <button onClick={() => { const v = titleCase(newCategory.trim()); if (!v) return; if (!categories.includes(v)) { const updated = [...categories, v]; setCategories(updated); saveCategories(updated); setCatSaved('Category added ✅'); setTimeout(() => setCatSaved(''), 2000); } setNewCategory(''); }}
+                <button disabled={!catsLoaded} onClick={() => { if (!catsLoaded) return; const v = titleCase(newCategory.trim()); if (!v) return; if (!categories.includes(v)) { const updated = [...categories, v]; setCategories(updated); saveCategories(updated); setCatSaved('Category added ✅'); setTimeout(() => setCatSaved(''), 2000); } setNewCategory(''); }}
                   style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>+</button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 400, overflowY: 'auto' }}>
