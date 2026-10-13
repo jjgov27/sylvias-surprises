@@ -275,6 +275,15 @@ app.post('/api/auth/login', (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+// Automation login (backups / daily summary) — long secret key, not a staff PIN
+const SERVICE_KEY = process.env.SERVICE_KEY || crypto.createHash('sha256').update(SESSION_SECRET + ':service').digest('hex');
+app.post('/api/auth/service', (req, res) => {
+  const key = String((req.body && req.body.key) || '');
+  const a = Buffer.from(key), b = Buffer.from(SERVICE_KEY);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: 'Invalid key' });
+  req.session.user = { name: 'Automation', initials: 'SYS' };
+  res.json({ ok: true });
+});
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
