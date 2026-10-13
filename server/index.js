@@ -6,6 +6,7 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 const Database = require('better-sqlite3');
 const multer = require('multer');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -143,6 +144,8 @@ for (const sql of INIT_TABLES) {
   db.exec(sql);
 }
 
+try { db.exec('ALTER TABLE sylvias_staff ADD COLUMN pin_hash TEXT'); } catch (e) { /* exists */ }
+
 // Run ALTER TABLE migrations (ignore "duplicate column" errors)
 for (const sql of ALTER_SQLS) {
   try { db.exec(sql); } catch (e) { /* column already exists */ }
@@ -215,12 +218,62 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Not authenticated' });
 }
 
-// Auth
+// ── PIN helpers ──
+function hashPin(pin) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(String(pin), salt, 32).toString('hex');
+  return salt + ':' + hash;
+}
+function verifyPin(pin, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [salt, hash] = stored.split(':');
+  const test = crypto.scryptSync(String(pin), salt, 32);
+  const real = Buffer.from(hash, 'hex');
+  return real.length === test.length && crypto.timingSafeEqual(real, test);
+}
+const isValidPin = (p) => typeof p === 'string' && /^\d{4}$/.test(p);
+const loginFailures = new Map(); // staffId -> { count, until }
+const MAX_TRIES = 5, LOCK_MS = 5 * 60 * 1000;
+
+// Auth — staff id + 4-digit PIN
 app.post('/api/auth/login', (req, res) => {
-  const { name, initials } = req.body;
-  if (!name || !initials) return res.status(400).json({ error: 'Name and initials required' });
-  req.session.user = { name, initials };
-  res.json({ ok: true, user: req.session.user });
+  try {
+    const { id, pin, newPin } = req.body || {};
+    const staff = db.prepare('SELECT id, name, initials, pin_hash FROM sylvias_staff WHERE id = ?').get(id);
+    if (!staff) return res.status(400).json({ error: 'Staff member not found' });
+
+    const f = loginFailures.get(staff.id);
+    if (f && f.until && f.until > Date.now()) {
+      const mins = Math.ceil((f.until - Date.now()) / 60000);
+      return res.status(429).json({ error: `Too many wrong PINs. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` });
+    }
+
+    if (!staff.pin_hash) {
+      // First-time login: staff member creates their own PIN
+      if (!isValidPin(newPin)) return res.status(400).json({ error: 'Please choose a 4-digit PIN', needsPin: true });
+      db.prepare('UPDATE sylvias_staff SET pin_hash = ? WHERE id = ?').run(hashPin(newPin), staff.id);
+    } else {
+      if (!isValidPin(pin) || !verifyPin(pin, staff.pin_hash)) {
+        const cur = loginFailures.get(staff.id) || { count: 0, until: 0 };
+        cur.count = (cur.until && cur.until <= Date.now()) ? 1 : cur.count + 1;
+        cur.until = 0;
+        if (cur.count >= MAX_TRIES) { cur.until = Date.now() + LOCK_MS; cur.count = 0; }
+        loginFailures.set(staff.id, cur);
+        if (cur.until) return res.status(429).json({ error: 'Too many wrong PINs. Locked for 5 minutes.' });
+        const left = MAX_TRIES - cur.count;
+        return res.status(401).json({ error: `Wrong PIN. ${left} tr${left === 1 ? 'y' : 'ies'} left.` });
+      }
+    }
+    loginFailures.delete(staff.id);
+    req.session.regenerate((err) => {
+      if (err) return res.status(500).json({ error: 'Session error' });
+      req.session.user = { name: staff.name, initials: staff.initials };
+      res.json({ ok: true, user: { id: staff.id, name: staff.name, initials: staff.initials } });
+    });
+  } catch (err) {
+    console.error('Login error:', err.message);
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 app.post('/api/auth/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
@@ -229,10 +282,10 @@ app.get('/api/auth/check', (req, res) => {
   res.json(req.session?.user ? { authenticated: true, user: req.session.user } : { authenticated: false });
 });
 
-// Public: staff list for login screen (no auth required)
+// Public: staff list for login screen (names only, plus whether a PIN is set)
 app.get('/api/auth/staff-list', (req, res) => {
   try {
-    const rows = db.prepare('SELECT id, name, initials FROM sylvias_staff ORDER BY name').all();
+    const rows = db.prepare('SELECT id, name, initials, created_at, CASE WHEN pin_hash IS NULL THEN 0 ELSE 1 END AS has_pin FROM sylvias_staff ORDER BY name').all();
     res.json(rows);
   } catch (err) {
     console.error('Staff list error:', err.message);
@@ -240,29 +293,44 @@ app.get('/api/auth/staff-list', (req, res) => {
   }
 });
 
-// Public: register new staff member (also sets session)
-app.post('/api/auth/register', (req, res) => {
+// Logged-in only: add new staff member with PIN
+app.post('/api/auth/register', requireAuth, (req, res) => {
   try {
-    const { name, initials } = req.body;
+    const { name, initials, pin } = req.body || {};
     if (!name || !initials) return res.status(400).json({ error: 'Name and initials required' });
-    // Check if initials already taken
+    if (!isValidPin(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
     const existing = db.prepare("SELECT id FROM sylvias_staff WHERE UPPER(initials) = UPPER(?)").get(initials);
     if (existing) return res.status(409).json({ error: 'Those initials are already taken. Try different ones.' });
-    db.prepare("INSERT INTO sylvias_staff (name, initials) VALUES (?, ?)").run(name, initials.toUpperCase());
-    const user = db.prepare("SELECT id, name, initials FROM sylvias_staff WHERE UPPER(initials) = UPPER(?)").get(initials.toUpperCase());
-    req.session.user = { name: user.name, initials: user.initials };
-    res.json({ ok: true, user });
+    db.prepare("INSERT INTO sylvias_staff (name, initials, pin_hash) VALUES (?, ?, ?)").run(name, initials.toUpperCase(), hashPin(pin));
+    res.json({ ok: true });
   } catch (err) {
     console.error('Register error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Public: delete staff member (from admin panel)
-app.post('/api/auth/delete-staff', (req, res) => {
+// Logged-in only: set / reset a staff member's PIN
+app.post('/api/auth/set-pin', requireAuth, (req, res) => {
+  try {
+    const { id, pin } = req.body || {};
+    if (!isValidPin(pin)) return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+    const r = db.prepare('UPDATE sylvias_staff SET pin_hash = ? WHERE id = ?').run(hashPin(pin), id);
+    if (!r.changes) return res.status(404).json({ error: 'Staff member not found' });
+    loginFailures.delete(Number(id));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Set PIN error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Logged-in only: delete staff member
+app.post('/api/auth/delete-staff', requireAuth, (req, res) => {
   try {
     const { id } = req.body;
     if (!id) return res.status(400).json({ error: 'Missing staff id' });
+    const count = db.prepare('SELECT COUNT(*) AS c FROM sylvias_staff').get().c;
+    if (count <= 1) return res.status(400).json({ error: "Can't delete the last staff member" });
     db.prepare('DELETE FROM sylvias_staff WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (err) {
@@ -271,7 +339,6 @@ app.post('/api/auth/delete-staff', (req, res) => {
   }
 });
 
-// SQL Query (SELECT)
 app.post('/api/sql/query', requireAuth, (req, res) => {
   try {
     const { sql } = req.body;

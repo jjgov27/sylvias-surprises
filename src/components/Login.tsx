@@ -1,118 +1,83 @@
-import React, { useState, useEffect } from 'react';
-import { LogIn, UserPlus, Users } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LogIn, Lock, Delete } from 'lucide-react';
 import { StaffUser } from '../types';
-// Staff data now fetched via public API endpoints (no auth needed)
 
 interface LoginProps {
   onLogin: (user: StaffUser) => void;
   onBack: () => void;
 }
 
+type Staff = StaffUser & { has_pin?: number };
+
 export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
-  const [staffList, setStaffList] = useState<StaffUser[]>([]);
-  const [mode, setMode] = useState<'select' | 'register'>('select');
-  const [initials, setInitials] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newInitials, setNewInitials] = useState('');
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [selected, setSelected] = useState<Staff | null>(null);
+  const [pin, setPin] = useState('');
+  const [firstPin, setFirstPin] = useState(''); // used when creating a PIN (first entry)
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    loadStaff();
-  }, []);
+  useEffect(() => { loadStaff(); }, []);
+  useEffect(() => { if (selected) setTimeout(() => inputRef.current?.focus(), 50); }, [selected, firstPin]);
 
   async function loadStaff() {
     try {
-      // Use public staff-list endpoint (no auth needed)
       const res = await fetch('/api/auth/staff-list', { credentials: 'include' });
-      const users = res.ok ? await res.json() : [];
-      setStaffList(users);
-      if (users.length === 0) setMode('register');
+      setStaffList(res.ok ? await res.json() : []);
     } catch {
-      // If fetch fails, show register mode
       setStaffList([]);
-      setMode('register');
     }
     setLoading(false);
   }
 
-  async function handleQuickLogin(user: StaffUser) {
+  const creating = !!selected && !selected.has_pin;
+
+  function choose(user: Staff) {
+    setSelected(user); setPin(''); setFirstPin(''); setError('');
+  }
+
+  async function submit(value: string) {
+    if (!selected || busy) return;
+    setError('');
+    if (!/^\d{4}$/.test(value)) { setError('PIN must be 4 digits'); return; }
+
+    let body: any = { id: selected.id, pin: value };
+    if (creating) {
+      if (!firstPin) { setFirstPin(value); setPin(''); return; }
+      if (value !== firstPin) { setError("PINs didn't match — please start again"); setFirstPin(''); setPin(''); return; }
+      body = { id: selected.id, newPin: value };
+    }
+
+    setBusy(true);
     try {
-      // Create server-side session
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ name: user.name, initials: user.initials })
+        body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError('Login failed. Please try again.');
+        setError(data.error || 'Login failed. Please try again.');
+        setPin('');
+        setBusy(false);
         return;
       }
+      onLogin({ ...selected, ...data.user });
     } catch {
       setError('Unable to connect. Please try again.');
-      return;
+      setPin('');
     }
-    onLogin(user);
+    setBusy(false);
   }
 
-  async function handleInitialsLogin() {
-    setError('');
-    if (!initials.trim()) {
-      setError('Please enter your initials');
-      return;
-    }
-    try {
-      const res = await fetch('/api/auth/staff-list', { credentials: 'include' });
-      const users = res.ok ? await res.json() : [];
-      const user = users.find((u: any) => u.initials?.toUpperCase() === initials.trim().toUpperCase());
-      if (!user) {
-        setError('Initials not recognised. Please register first.');
-        return;
-      }
-      // Create server-side session
-      const loginRes = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name: user.name, initials: user.initials })
-      });
-      if (!loginRes.ok) {
-        setError('Login failed. Please try again.');
-        return;
-      }
-      onLogin(user);
-    } catch {
-      setError('Unable to verify initials. Please try again.');
-    }
-  }
-
-  async function handleRegister() {
-    setError('');
-    if (!newName.trim() || !newInitials.trim()) {
-      setError('Please enter both name and initials');
-      return;
-    }
-    if (newInitials.trim().length > 4) {
-      setError('Initials should be 1-4 characters');
-      return;
-    }
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name: newName.trim(), initials: newInitials.trim().toUpperCase() })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Registration failed');
-        return;
-      }
-      onLogin(data.user);
-    } catch {
-      setError('Registration failed. Please try again.');
-    }
+  function typeDigit(d: string) {
+    if (busy) return;
+    const next = (pin + d).slice(0, 4);
+    setPin(next);
+    if (next.length === 4) submit(next);
   }
 
   if (loading) {
@@ -133,95 +98,81 @@ export const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           </div>
 
           {error && (
-            <div className="alert alert-error text-sm">
-              <span>{error}</span>
-            </div>
+            <div className="alert alert-error text-sm"><span>{error}</span></div>
           )}
 
-          {mode === 'select' ? (
+          {!selected ? (
             <>
-              {/* Quick login - click your name */}
-              {staffList.length > 0 && (
-                <div className="mb-4">
+              {staffList.length === 0 ? (
+                <p className="text-center text-sm text-base-content/60">No staff accounts found. Please contact the shop owner.</p>
+              ) : (
+                <div className="mb-2">
                   <label className="label"><span className="label-text font-semibold">Select your name:</span></label>
                   <div className="flex flex-col gap-2">
                     {staffList.map(user => (
-                      <button
-                        key={user.id}
-                        className="btn btn-outline btn-primary justify-start gap-3"
-                        onClick={() => handleQuickLogin(user)}
-                      >
+                      <button key={user.id} className="btn btn-outline btn-primary justify-start gap-3" onClick={() => choose(user)}>
                         <div className="badge badge-primary badge-sm font-mono">{user.initials}</div>
                         {user.name}
+                        <Lock size={14} className="ml-auto opacity-50" />
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* Or sign in with initials */}
-              <div className="divider text-base-content/40 text-xs">or enter initials</div>
-              <div className="flex gap-2">
-                <label className="input input-bordered flex items-center gap-2 flex-1">
-                  <LogIn className="h-[1em] opacity-50" />
-                  <input
-                    type="text"
-                    className="grow uppercase"
-                    placeholder="Initials e.g. GS"
-                    value={initials}
-                    onChange={e => setInitials(e.target.value.toUpperCase())}
-                    maxLength={4}
-                    onKeyDown={e => e.key === 'Enter' && handleInitialsLogin()}
-                  />
-                </label>
-                <button className="btn btn-primary" onClick={handleInitialsLogin}>
-                  <LogIn size={18} /> Sign In
-                </button>
-              </div>
-
-              <div className="divider text-base-content/40 text-xs" />
-              <button className="btn btn-ghost btn-sm" onClick={() => setMode('register')}>
-                <UserPlus size={16} /> Register New Staff Member
-              </button>
             </>
           ) : (
-            <>
-              <label className="label"><span className="label-text font-semibold">Register New Staff</span></label>
-              <label className="input input-bordered flex items-center gap-2">
-                <Users className="h-[1em] opacity-50" />
-                <input
-                  type="text"
-                  className="grow"
-                  placeholder="Full name e.g. Gavin Smith"
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                />
-              </label>
-              <label className="input input-bordered flex items-center gap-2 mt-2">
-                <LogIn className="h-[1em] opacity-50" />
-                <input
-                  type="text"
-                  className="grow uppercase"
-                  placeholder="Initials e.g. GS"
-                  value={newInitials}
-                  onChange={e => setNewInitials(e.target.value.toUpperCase())}
-                  maxLength={4}
-                />
-              </label>
-              <button className="btn btn-primary mt-3" onClick={handleRegister}>
-                <UserPlus size={18} /> Register & Sign In
+            <div className="text-center">
+              <div className="font-semibold text-lg">{selected.name}</div>
+              <div className="text-sm text-base-content/60 mb-3">
+                {creating
+                  ? (firstPin ? 'Enter your new PIN again to confirm' : 'First time in — choose a 4-digit PIN')
+                  : 'Enter your 4-digit PIN'}
+              </div>
+
+              {/* PIN dots */}
+              <div className="flex justify-center gap-3 mb-3" onClick={() => inputRef.current?.focus()}>
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} style={{ width: 18, height: 18, borderRadius: 9, border: '2px solid #7c3aed', background: i < pin.length ? '#7c3aed' : 'transparent' }} />
+                ))}
+              </div>
+              {/* Hidden input so keyboards work too */}
+              <input
+                ref={inputRef}
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                value={pin}
+                maxLength={4}
+                onChange={e => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setPin(v);
+                  if (v.length === 4) submit(v);
+                }}
+                style={{ position: 'absolute', opacity: 0, width: 1, height: 1 }}
+                aria-label="PIN"
+              />
+
+              {/* Keypad */}
+              <div className="grid grid-cols-3 gap-2 max-w-[240px] mx-auto">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(d => (
+                  <button key={d} className="btn btn-lg" disabled={busy} onClick={() => typeDigit(d)}>{d}</button>
+                ))}
+                <button className="btn btn-lg btn-ghost" disabled={busy || !pin} onClick={() => setPin('')} title="Clear">C</button>
+                <button className="btn btn-lg" disabled={busy} onClick={() => typeDigit('0')}>0</button>
+                <button className="btn btn-lg btn-ghost" disabled={busy || !pin} onClick={() => setPin(pin.slice(0, -1))} title="Back"><Delete size={18} /></button>
+              </div>
+
+              {busy && <div className="mt-3"><span className="loading loading-spinner loading-sm text-primary" /></div>}
+
+              <button className="btn btn-ghost btn-sm mt-3" onClick={() => { setSelected(null); setPin(''); setFirstPin(''); setError(''); }}>
+                ← Not you? Pick another name
               </button>
-              {staffList.length > 0 && (
-                <button className="btn btn-ghost btn-sm mt-2" onClick={() => setMode('select')}>
-                  ← Back to Staff List
-                </button>
-              )}
-            </>
+            </div>
           )}
 
           <div className="mt-4 pt-4 border-t border-base-300">
             <button className="btn btn-ghost btn-sm w-full" onClick={onBack}>
-              ← Back to Website
+              <LogIn size={14} /> ← Back to Website
             </button>
           </div>
         </div>

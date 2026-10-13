@@ -10,6 +10,7 @@ import {
 import { StockItem } from '../types';
 import { EmailSettings } from './EmailSettings';
 import { SnagTracker } from './SnagTracker';
+import { StaffPins } from './StaffPins';
 
 interface Props { currentUser: StaffUser; }
 
@@ -53,7 +54,7 @@ const CLEARABLE_TABLES: { table: string; label: string; icon: string; danger?: b
   { table: 'sylvias_bank_transactions', label: 'Bank Transactions', icon: '💱' },
 ];
 
-type Tab = 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'snags' | 'reset';
+type Tab = 'staff' | 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'snags' | 'reset';
 
 export function Admin({ currentUser }: Props) {
   const [tab, setTab] = useState<Tab>('business');
@@ -232,6 +233,7 @@ export function Admin({ currentUser }: Props) {
       <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid #e5e7eb', marginBottom: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
         {([
           { id: 'business' as Tab, label: '🏪 Business Details' },
+          { id: 'staff' as Tab, label: '🔐 Staff & PINs' },
           { id: 'bank' as Tab, label: '🏦 Bank Accounts' },
           { id: 'categories' as Tab, label: '📂 Categories & Locations' },
           { id: 'maintenance' as Tab, label: '🔧 Maintenance' },
@@ -817,6 +819,10 @@ export function Admin({ currentUser }: Props) {
       {/* ── Email Settings Tab ── */}
       {tab === 'email' && (
         <EmailSettings currentUser={currentUser} />
+      )}
+
+      {tab === 'staff' && (
+        <StaffPins currentUser={currentUser} />
       )}
 
       {tab === 'snags' && (
