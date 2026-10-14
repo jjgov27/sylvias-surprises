@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Global print: hide app chrome (sidebar, top bar, notepad, controls) ── */
+@media print {
+  .no-print { display: none !important; }
+  html, body, #root { height: auto !important; overflow: visible !important; background: #fff !important; }
+  .print-main { overflow: visible !important; min-height: 0 !important; }
+  @page { margin: 15mm; }
+}

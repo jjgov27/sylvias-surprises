@@ -65,12 +65,12 @@ export function PnlReport({ currentUser }: Props) {
 
   return (
     <div className="p-4 max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+      <h2 className="no-print text-2xl font-bold mb-4 flex items-center gap-2">
         <BarChart3 size={24} /> Profit & Loss Statement
       </h2>
 
       {/* Date range */}
-      <div className="flex gap-3 mb-6 items-end flex-wrap">
+      <div className="no-print flex gap-3 mb-6 items-end flex-wrap">
         <div className="form-control">
           <label className="label py-1"><span className="label-text text-sm">From</span></label>
           <input type="date" className="input input-bordered input-sm" value={dateFrom}
@@ -91,7 +91,7 @@ export function PnlReport({ currentUser }: Props) {
       ) : !data ? (
         <div className="text-center py-8 text-base-content/50">No data available.</div>
       ) : (
-        <div className="bg-white text-black p-8 shadow-lg rounded-lg print:shadow-none" id="pnl-report">
+        <div className="bg-white text-black p-8 shadow-lg rounded-lg print:shadow-none print:p-0" id="pnl-report">
           {/* Header */}
           <div className="text-center border-b-2 pb-4 mb-6" style={{ borderColor: '#5C3D2E' }}>
             <h1 className="text-2xl font-bold" style={{ color: '#5C3D2E' }}>Sylvia's Surprises</h1>

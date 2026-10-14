@@ -541,7 +541,7 @@ export default function App() {
     <div className="min-h-screen bg-base-100 flex" style={{ zoom: uiZoom }}>
       {/* ── LEFT SIDEBAR ── */}
       <aside
-        className={`flex flex-col bg-base-200 border-r border-base-300 transition-all duration-200 flex-shrink-0
+        className={`no-print flex flex-col bg-base-200 border-r border-base-300 transition-all duration-200 flex-shrink-0
           ${sidebarOpen ? 'w-64' : 'w-16'}`}
         style={{ minHeight: '100vh' }}
       >
@@ -755,9 +755,9 @@ export default function App() {
       </aside>
 
       {/* ── MAIN CONTENT ── */}
-      <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto" style={{ minHeight: '100vh' }}>
+      <main ref={mainRef} className="print-main flex-1 min-w-0 overflow-y-auto" style={{ minHeight: '100vh' }}>
         {/* Back to Dashboard bar */}
-        <div className="sticky top-0 z-30 bg-base-100/90 backdrop-blur border-b border-base-200 px-5 py-3 flex items-center gap-3">
+        <div className="no-print sticky top-0 z-30 bg-base-100/90 backdrop-blur border-b border-base-200 px-5 py-3 flex items-center gap-3">
           <button
             className="btn btn-sm btn-ghost gap-1 text-primary hover:bg-primary/10 text-base"
             onClick={() => setView('dashboard')}
@@ -875,7 +875,7 @@ export default function App() {
           />
         )}
       </main>
-      <FloatingNotepad />
+      <div className="no-print"><FloatingNotepad /></div>
     </div>
   );
 }
