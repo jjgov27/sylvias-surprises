@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { findPartNumberClash } from '../utils/db';
 // Use window.tasklet.sqlQuery for SELECTs, sqlExec for writes
 const sqlQuery = (sql: string) => (window as any).tasklet.sqlQuery(sql);
 const sqlExec = (sql: string) => (window as any).tasklet.sqlExec(sql);
@@ -106,6 +107,21 @@ export default function BulkStockEntry({ staffName, staffInitials, onBack }: Pro
       const rrp = parseFloat(r.rrp) || 0;
       if (rrp > 0 && cost > rrp) errors.push(`Row ${i + 1} ("${r.description.trim().slice(0, 30)}"): Cost (£${cost}) exceeds RRP (£${rrp})`);
     });
+
+    // Duplicate part numbers — within this batch and against existing stock
+    {
+      const seen = new Set<string>();
+      for (let i = 0; i < filledRows.length; i++) {
+        const r = filledRows[i];
+        const pn = r.part_number.trim().toUpperCase();
+        if (!pn) continue;
+        const label = `Row ${i + 1} ("${r.description.trim().slice(0, 30)}")`;
+        if (seen.has(pn)) { errors.push(`${label}: Part number ${pn} is used more than once in this list`); continue; }
+        seen.add(pn);
+        const clash = await findPartNumberClash(pn);
+        if (clash) errors.push(`${label}: Part number ${pn} is already used by "${clash.description}" — please use a different part number`);
+      }
+    }
 
     if (errors.length > 0) {
       setResult({ ok: 0, errors });

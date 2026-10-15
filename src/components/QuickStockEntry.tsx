@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Plus, Trash2, Save, Upload, FileSpreadsheet, AlertTriangle, CheckCircle, Camera, Loader2, X, PackagePlus, PackageCheck, Printer } from 'lucide-react';
 import { StaffUser, StockItem } from '../types';
-import { addStockItem, titleCase, getLocations, getStaffUsers, getAllStock, addScanStagingBatch } from '../utils/db';
+import { addStockItem, findPartNumberClash, titleCase, getLocations, getStaffUsers, getAllStock, addScanStagingBatch } from '../utils/db';
 
 interface QuickStockEntryProps {
   currentUser: StaffUser;
@@ -145,6 +145,23 @@ export const QuickStockEntry: React.FC<QuickStockEntryProps> = ({ currentUser, o
       return { ...r, error: '' };
     });
     if (hasError) { setRows(validated); return; }
+
+    // Duplicate part number check (against stock and within this batch)
+    {
+      const seen = new Map<string, number>();
+      for (let i = 0; i < validated.length; i++) {
+        const r = validated[i];
+        if (r.saved || !r.description.trim()) continue;
+        if (r.dupMatch && r.dupAction === 'add') continue;
+        const pn = r.partNumber.trim().toUpperCase();
+        if (!pn) continue;
+        if (seen.has(pn)) { hasError = true; validated[i] = { ...r, error: `Part no. ${pn} used twice in this list` }; continue; }
+        seen.set(pn, i);
+        const clash = await findPartNumberClash(pn);
+        if (clash) { hasError = true; validated[i] = { ...r, error: `Part no. ${pn} already used by "${clash.description}"` }; }
+      }
+      if (hasError) { setRows([...validated]); return; }
+    }
 
     setSaving(true);
     let count = 0;

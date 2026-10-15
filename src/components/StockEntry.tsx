@@ -4,7 +4,7 @@ import { PostcodeLookup } from './PostcodeLookup';
 import { StockItem, StaffUser, Supplier } from '../types';
 import {
   addStockItem, addPurchasedStockItem, updateStockItem, CATEGORIES, LOCATIONS, STOCK_PAYMENT_METHODS,
-  getLearnedItemNames, titleCase, getStaffUsers, getAllStock,
+  getLearnedItemNames, titleCase, getStaffUsers, getAllStock, findPartNumberClash,
   getAllSuppliers, addSupplier, SOURCE_TYPES, getCategories, getLocations,
   addSupplierInvoice,
 } from '../utils/db';
@@ -44,6 +44,15 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   const rrpRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [partNumberManual, setPartNumberManual] = useState(false);
+
+  /* Live duplicate part-number check */
+  const [pnClash, setPnClash] = useState<{ id: number; part_number: string; description: string; qty: number } | null>(null);
+  useEffect(() => {
+    const pn = partNumber.trim();
+    if (!pn) { setPnClash(null); return; }
+    const t = setTimeout(() => { findPartNumberClash(pn, editItem?.id).then(setPnClash).catch(() => {}); }, 300);
+    return () => clearTimeout(t);
+  }, [partNumber]);
 
   /* Enter key moves focus to next field */
   const fieldOrder = useRef<(React.RefObject<HTMLElement | null>)[]>([]);
@@ -237,6 +246,16 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
     setSuccess('');
 
     if (!description.trim()) { setError('Description is required'); return; }
+
+    if (partNumber.trim()) {
+      const clash = await findPartNumberClash(partNumber, editItem?.id);
+      if (clash) {
+        setPnClash(clash);
+        setError(`Part number ${clash.part_number} is already used by "${clash.description}". Please use a different part number.`);
+        partNoRef.current?.focus();
+        return;
+      }
+    }
 
     // If part number is blank and we haven't got initials yet, show prompt
     if (!partNumber.trim() && !noPartInitials && !editItem) {
@@ -436,6 +455,11 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
                 onKeyDown={e => handleEnterAdvance(e, partNoRef)}
                 />
             </label>
+            {pnClash && (
+              <div className="alert alert-error py-2 px-3 mt-1 text-sm">
+                <span>⛔ Part number <strong>{pnClash.part_number}</strong> is already used by <strong>"{pnClash.description}"</strong> (qty {pnClash.qty}). Please use a different part number.</span>
+              </div>
+            )}
 
           </div>
 

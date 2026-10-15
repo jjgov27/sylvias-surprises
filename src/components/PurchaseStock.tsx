@@ -4,7 +4,7 @@ import { PostcodeLookup } from './PostcodeLookup';
 import { StaffUser, Supplier } from '../types';
 import {
   addPurchasedStockItem, CATEGORIES, LOCATIONS, STOCK_PAYMENT_METHODS,
-  getLearnedItemNames, titleCase, getStaffUsers,
+  getLearnedItemNames, titleCase, getStaffUsers, findPartNumberClash,
   getAllSuppliers, addSupplier, SOURCE_TYPES, getCategories, getLocations,
   addSupplierInvoice,
 } from '../utils/db';
@@ -32,6 +32,15 @@ export const PurchaseStock: React.FC<PurchaseStockProps> = ({ currentUser, onSav
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+
+  /* Live duplicate part-number check */
+  const [pnClash, setPnClash] = useState<{ id: number; part_number: string; description: string; qty: number } | null>(null);
+  useEffect(() => {
+    const pn = partNumber.trim();
+    if (!pn) { setPnClash(null); return; }
+    const t = setTimeout(() => { findPartNumberClash(pn, undefined).then(setPnClash).catch(() => {}); }, 300);
+    return () => clearTimeout(t);
+  }, [partNumber]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [allItemNames, setAllItemNames] = useState<string[]>([]);
@@ -152,6 +161,14 @@ export const PurchaseStock: React.FC<PurchaseStockProps> = ({ currentUser, onSav
     if (!partNumber.trim()) {
       setError('Part number is required');
       return;
+    }
+    {
+      const clash = await findPartNumberClash(partNumber);
+      if (clash) {
+        setPnClash(clash);
+        setError(`Part number ${clash.part_number} is already used by "${clash.description}". Please use a different part number.`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -278,6 +295,11 @@ export const PurchaseStock: React.FC<PurchaseStockProps> = ({ currentUser, onSav
                 onChange={e => { setPartNumber(e.target.value.toUpperCase()); }}
               />
             </label>
+            {pnClash && (
+              <div className="alert alert-error py-2 px-3 mt-1 text-sm">
+                <span>⛔ Part number <strong>{pnClash.part_number}</strong> is already used by <strong>"{pnClash.description}"</strong> (qty {pnClash.qty}). Please use a different part number.</span>
+              </div>
+            )}
           </div>
 
           {/* Category */}

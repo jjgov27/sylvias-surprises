@@ -481,6 +481,16 @@ export async function getStaffByInitials(initials: string): Promise<StaffUser | 
 
 // ── Stock Items ──
 
+/** Find existing stock using the same part number (case/space-insensitive). Blank part numbers never clash. */
+export async function findPartNumberClash(partNumber: string, excludeId?: number): Promise<{ id: number; part_number: string; description: string; qty: number } | null> {
+  const pn = (partNumber || '').trim().toUpperCase();
+  if (!pn) return null;
+  const rows = await window.tasklet.sqlQuery(
+    `SELECT id, part_number, description, qty FROM sylvias_stock WHERE UPPER(TRIM(part_number)) = '${esc(pn)}'${excludeId ? ` AND id != ${Number(excludeId)}` : ''} LIMIT 1`
+  ) as any[];
+  return rows && rows.length ? rows[0] : null;
+}
+
 export async function getAllStock(): Promise<StockItem[]> {
   const rows = await window.tasklet.sqlQuery(
     'SELECT * FROM sylvias_stock ORDER BY description ASC'
