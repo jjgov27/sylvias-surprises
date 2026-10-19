@@ -44,6 +44,40 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   const rrpRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const [partNumberManual, setPartNumberManual] = useState(false);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+
+  /* Read an image file, shrink to max 800px and save as compact JPEG */
+  function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoError('');
+    if (!file.type.startsWith('image/')) { setPhotoError('Please choose a picture file.'); return; }
+    setPhotoBusy(true);
+    const reader = new FileReader();
+    reader.onerror = () => { setPhotoBusy(false); setPhotoError('Could not read that picture.'); };
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => { setPhotoBusy(false); setPhotoError('That picture format is not supported — try a JPG or PNG.'); };
+      img.onload = () => {
+        const max = 800;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { setPhotoBusy(false); setPhotoError('Could not process that picture.'); return; }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        setPhoto(canvas.toDataURL('image/jpeg', 0.72));
+        setPhotoBusy(false);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
 
   /* Live duplicate part-number check */
   const [pnClash, setPnClash] = useState<{ id: number; part_number: string; description: string; qty: number } | null>(null);
@@ -57,7 +91,7 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   /* Enter key moves focus to next field */
   const fieldOrder = useRef<(React.RefObject<HTMLElement | null>)[]>([]);
   useEffect(() => {
-    fieldOrder.current = [descRef, partNoRef, catRef, qtyRef, locRef, costRef, rrpRef, photoRef];
+    fieldOrder.current = [descRef, partNoRef, catRef, qtyRef, locRef, costRef, rrpRef];
   }, []);
 
   const handleEnterAdvance = useCallback((e: React.KeyboardEvent, currentRef: React.RefObject<HTMLElement | null>) => {
@@ -644,18 +678,31 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
             </div>
           )}
 
-          {/* Photo URL */}
+          {/* Photo — take with camera or choose file (auto-shrunk) */}
           <div className="form-control">
             <label className="label"><span className="label-text font-semibold">Photo</span></label>
-            <label className="input input-bordered flex items-center gap-2">
-              <Camera className="h-[1em] opacity-50" />
-              <input type="text" className="grow" value={photo} onChange={e => setPhoto(e.target.value)} placeholder="Paste image URL or leave blank" />
-            </label>
-            {photo && (
-              <div className="mt-2">
-                <img src={photo} alt="Preview" className="rounded-lg max-h-32 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoFile} />
+            <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
+            {!photo ? (
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn btn-outline btn-sm gap-1" onClick={() => cameraRef.current?.click()} disabled={photoBusy}>
+                  <Camera className="h-4 w-4" /> 📷 Take Photo
+                </button>
+                <button type="button" className="btn btn-outline btn-sm gap-1" onClick={() => photoRef.current?.click()} disabled={photoBusy}>
+                  📁 Choose File
+                </button>
+                {photoBusy && <span className="loading loading-spinner loading-sm self-center" />}
+              </div>
+            ) : (
+              <div className="relative inline-block w-fit">
+                <img src={photo} alt="Item photo" className="rounded-lg max-h-40 object-contain border border-base-300" />
+                <button type="button" className="btn btn-circle btn-xs btn-error absolute -top-2 -right-2" title="Remove photo"
+                  onClick={() => { setPhoto(''); if (photoRef.current) photoRef.current.value = ''; if (cameraRef.current) cameraRef.current.value = ''; }}>
+                  <X className="h-3 w-3" />
+                </button>
               </div>
             )}
+            {photoError && <p className="text-error text-sm mt-1">{photoError}</p>}
           </div>
 
           {/* Entered By (read-only) */}
