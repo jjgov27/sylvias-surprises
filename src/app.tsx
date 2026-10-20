@@ -217,7 +217,7 @@ export default function App() {
 
   function handleLogin(user: StaffUser) {
     setCurrentUser(user);
-    setView('dashboard');
+    setView(new URLSearchParams(window.location.search).get('ebay') ? 'admin' : 'dashboard');
   }
 
   function handleLogout() {

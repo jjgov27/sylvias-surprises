@@ -58,7 +58,7 @@ const CLEARABLE_TABLES: { table: string; label: string; icon: string; danger?: b
 type Tab = 'staff' | 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'snags' | 'ebay' | 'reset';
 
 export function Admin({ currentUser }: Props) {
-  const [tab, setTab] = useState<Tab>('business');
+  const [tab, setTab] = useState<Tab>(new URLSearchParams(window.location.search).get('ebay') ? 'ebay' : 'business');
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState('');

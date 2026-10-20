@@ -468,38 +468,8 @@ app.post('/api/admin/reset', requireAuth, (req, res) => {
   res.json({ ok: true, tablesCleared: tables.length });
 });
 
-// ── eBay integration (stage 1: connection check) ──
-const EBAY_ENV = (process.env.EBAY_ENV || 'sandbox').toLowerCase() === 'production' ? 'production' : 'sandbox';
-const EBAY_API = EBAY_ENV === 'production' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com';
-let ebayAppToken = { token: null, expires: 0 };
-async function getEbayAppToken() {
-  const id = process.env.EBAY_APP_ID, secret = process.env.EBAY_CERT_ID;
-  if (!id || !secret) throw new Error('eBay keys not set on this site');
-  if (ebayAppToken.token && Date.now() < ebayAppToken.expires - 60000) return ebayAppToken.token;
-  const r = await fetch(EBAY_API + '/identity/v1/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + Buffer.from(id + ':' + secret).toString('base64') },
-    body: 'grant_type=client_credentials&scope=' + encodeURIComponent('https://api.ebay.com/oauth/api_scope'),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data.access_token) throw new Error('eBay rejected the keys: ' + (data.error_description || data.error || r.status));
-  ebayAppToken = { token: data.access_token, expires: Date.now() + (data.expires_in || 7200) * 1000 };
-  return ebayAppToken.token;
-}
-app.get('/api/ebay/status', requireAuth, async (req, res) => {
-  const configured = !!(process.env.EBAY_APP_ID && process.env.EBAY_CERT_ID);
-  const out = { configured, env: EBAY_ENV, appIdHint: configured ? String(process.env.EBAY_APP_ID).slice(0, 18) + '…' : null, hasRuName: !!process.env.EBAY_RUNAME, keysOk: false, apiOk: false, categoryTreeId: null, error: null };
-  if (!configured) return res.json(out);
-  try {
-    const token = await getEbayAppToken();
-    out.keysOk = true;
-    const r = await fetch(EBAY_API + '/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=EBAY_GB', { headers: { Authorization: 'Bearer ' + token } });
-    const d = await r.json().catch(() => ({}));
-    if (r.ok) { out.apiOk = true; out.categoryTreeId = d.categoryTreeId || null; }
-    else out.error = 'Keys OK but eBay test call failed (' + r.status + ')';
-  } catch (e) { out.error = e.message; }
-  res.json(out);
-});
+// ── eBay integration (connect, list, sync) ──
+require('./ebay')(app, db, requireAuth, { dbPath: DB_PATH });
 
 // ── DB Backup/Restore (admin only) ──
 app.get('/api/admin/db-backup', requireAuth, (req, res) => {
