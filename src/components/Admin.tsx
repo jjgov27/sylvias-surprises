@@ -11,6 +11,7 @@ import { StockItem } from '../types';
 import { EmailSettings } from './EmailSettings';
 import { SnagTracker } from './SnagTracker';
 import { StaffPins } from './StaffPins';
+import { EbaySettings } from './EbaySettings';
 
 interface Props { currentUser: StaffUser; }
 
@@ -54,7 +55,7 @@ const CLEARABLE_TABLES: { table: string; label: string; icon: string; danger?: b
   { table: 'sylvias_bank_transactions', label: 'Bank Transactions', icon: '💱' },
 ];
 
-type Tab = 'staff' | 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'snags' | 'reset';
+type Tab = 'staff' | 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'snags' | 'ebay' | 'reset';
 
 export function Admin({ currentUser }: Props) {
   const [tab, setTab] = useState<Tab>('business');
@@ -240,6 +241,7 @@ export function Admin({ currentUser }: Props) {
           { id: 'duplicates' as Tab, label: '🔍 Duplicate Checker' },
           { id: 'email' as Tab, label: '📧 Email Settings' },
           { id: 'snags' as Tab, label: '🐛 Snag Tracker' },
+          { id: 'ebay' as Tab, label: '🛒 eBay' },
           { id: 'reset' as Tab, label: '🧹 Data Reset' },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
@@ -824,6 +826,8 @@ export function Admin({ currentUser }: Props) {
       {tab === 'staff' && (
         <StaffPins currentUser={currentUser} />
       )}
+
+      {tab === 'ebay' && <EbaySettings />}
 
       {tab === 'snags' && (
         <SnagTracker currentUser={currentUser} />
