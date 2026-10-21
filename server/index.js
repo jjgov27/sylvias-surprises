@@ -448,6 +448,37 @@ app.post('/api/files/read-binary', requireAuth, (req, res) => {
   }
 });
 
+// ── Stock photos (up to 12 per item, one main) ──
+db.exec("CREATE TABLE IF NOT EXISTS sylvias_stock_photos (id INTEGER PRIMARY KEY AUTOINCREMENT, stock_id INTEGER NOT NULL, photo TEXT NOT NULL, is_main INTEGER NOT NULL DEFAULT 0, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT (datetime('now')))");
+db.exec("CREATE INDEX IF NOT EXISTS idx_stock_photos_stock ON sylvias_stock_photos(stock_id)");
+function getStockPhotos(stockId) {
+  const rows = db.prepare('SELECT id, photo, is_main, sort_order FROM sylvias_stock_photos WHERE stock_id = ? ORDER BY is_main DESC, sort_order, id').all(stockId);
+  if (rows.length) return rows;
+  const s = db.prepare('SELECT photo FROM sylvias_stock WHERE id = ?').get(stockId);
+  return s && s.photo ? [{ id: 0, photo: s.photo, is_main: 1, sort_order: 0 }] : [];
+}
+app.get('/api/stock/:id/photos', requireAuth, (req, res) => {
+  try { res.json({ photos: getStockPhotos(Number(req.params.id)) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.put('/api/stock/:id/photos', requireAuth, (req, res) => {
+  try {
+    const stockId = Number(req.params.id);
+    if (!db.prepare('SELECT id FROM sylvias_stock WHERE id = ?').get(stockId)) return res.status(404).json({ error: 'Stock item not found' });
+    let list = Array.isArray(req.body && req.body.photos) ? req.body.photos : [];
+    list = list.filter(p => p && typeof p.photo === 'string' && /^(data:image\/|https?:\/\/|\/uploads\/)/i.test(p.photo)).slice(0, 12);
+    let mainIdx = list.findIndex(p => p.is_main);
+    if (mainIdx < 0 && list.length) mainIdx = 0;
+    db.transaction(() => {
+      db.prepare('DELETE FROM sylvias_stock_photos WHERE stock_id = ?').run(stockId);
+      const ins = db.prepare('INSERT INTO sylvias_stock_photos (stock_id, photo, is_main, sort_order) VALUES (?,?,?,?)');
+      list.forEach((p, i) => ins.run(stockId, p.photo, i === mainIdx ? 1 : 0, i));
+      db.prepare('UPDATE sylvias_stock SET photo = ? WHERE id = ?').run(mainIdx >= 0 ? list[mainIdx].photo : '', stockId);
+    })();
+    res.json({ ok: true, count: list.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Photo upload
 const upload = multer({
   storage: multer.diskStorage({
@@ -463,7 +494,7 @@ app.post('/api/upload', requireAuth, upload.single('file'), (req, res) => {
 
 // Data reset (admin, behind login + confirmation)
 app.post('/api/admin/reset', requireAuth, (req, res) => {
-  const tables = ['sylvias_stock','sylvias_sales','sylvias_sale_items','sylvias_customers','sylvias_expenses','sylvias_payments','sylvias_refunds','sylvias_credit_notes','sylvias_gift_vouchers','sylvias_consignment_items','sylvias_consignees','sylvias_reservations','sylvias_wishlist','sylvias_bullion','sylvias_bank_transactions','sylvias_eod_cashup','sylvias_scan_staging','sylvias_supplier_invoices','sylvias_supplier_invoice_payments','sylvias_suppliers','sylvias_float','sylvias_learned_items'];
+  const tables = ['sylvias_stock','sylvias_sales','sylvias_sale_items','sylvias_customers','sylvias_expenses','sylvias_payments','sylvias_refunds','sylvias_credit_notes','sylvias_gift_vouchers','sylvias_consignment_items','sylvias_consignees','sylvias_reservations','sylvias_wishlist','sylvias_bullion','sylvias_bank_transactions','sylvias_eod_cashup','sylvias_scan_staging','sylvias_supplier_invoices','sylvias_supplier_invoice_payments','sylvias_suppliers','sylvias_float','sylvias_learned_items','sylvias_stock_photos'];
   for (const t of tables) { try { db.exec('DELETE FROM ' + t); } catch(e) {} }
   res.json({ ok: true, tablesCleared: tables.length });
 });

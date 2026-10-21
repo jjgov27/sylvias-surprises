@@ -535,6 +535,7 @@ export async function updateStockItem(item: StockItem): Promise<void> {
 
 export async function deleteStockItem(id: number): Promise<void> {
   await window.tasklet.sqlExec(`DELETE FROM sylvias_stock WHERE id=${id}`);
+  try { await window.tasklet.sqlExec(`DELETE FROM sylvias_stock_photos WHERE stock_id=${id}`); } catch (e) { /* table may not exist yet */ }
 }
 
 export async function updateStockQty(id: number, newQty: number): Promise<void> {
@@ -3280,4 +3281,18 @@ export async function getStockRemovalsSummaryByRange(from: string, to: string): 
     if (r.type === 'gift') { result.giftCount = r.cnt; result.giftQty = r.qty; result.giftCost = r.cost; result.giftRetail = r.retail; }
   }
   return result;
+}
+
+
+// ── Stock photos (up to 12 per item; one marked main) ──
+export type StockPhoto = { photo: string; is_main: boolean };
+export async function getStockPhotos(stockId: number): Promise<StockPhoto[]> {
+  const r = await fetch('/api/stock/' + stockId + '/photos', { credentials: 'include' });
+  if (!r.ok) throw new Error('Could not load photos');
+  const d = await r.json();
+  return (d.photos || []).map((p: any) => ({ photo: p.photo, is_main: !!p.is_main }));
+}
+export async function saveStockPhotos(stockId: number, photos: StockPhoto[]): Promise<void> {
+  const r = await fetch('/api/stock/' + stockId + '/photos', { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photos }) });
+  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'Could not save photos'); }
 }

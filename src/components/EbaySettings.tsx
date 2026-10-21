@@ -228,6 +228,22 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [result, setResult] = useState<{ kind: 'ok' | 'err'; text: string; url?: string | null } | null>(null);
   const timer = useRef<any>(null);
+  const [pics, setPics] = useState<{ photo: string; is_main: number }[]>([]);
+
+  // Arrived from Stock Control's 🛒 button — pre-select that item
+  useEffect(() => {
+    let id: string | null = null;
+    try { id = sessionStorage.getItem('ebay_list_stock_id'); sessionStorage.removeItem('ebay_list_stock_id'); } catch {}
+    if (!id) return;
+    (async () => {
+      const rows = await (window as any).tasklet.sqlQuery(`SELECT id, part_number, description, qty, rrp, offer_price, on_offer, photo, category FROM sylvias_stock WHERE id = ${Number(id)}`);
+      const r = (rows as StockRow[])[0];
+      if (!r) return;
+      if (listedIds.has(r.id)) { setResult({ kind: 'err', text: 'That item is already on eBay — see the listings below.' }); return; }
+      if (r.qty < 1) { setResult({ kind: 'err', text: 'That item is out of stock.' }); return; }
+      pick(r);
+    })();
+  }, []);
 
   useEffect(() => {
     clearTimeout(timer.current);
@@ -241,6 +257,8 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
 
   function pick(r: StockRow) {
     setItem(r); setResults([]); setQ(''); setResult(null); setErrors({});
+    setPics(r.photo ? [{ photo: r.photo, is_main: 1 }] : []);
+    api('/api/stock/' + r.id + '/photos').then(d => setPics(d.photos || [])).catch(() => {});
     setTitle(r.description.slice(0, 80));
     setDesc(r.description + (r.part_number ? '\n\nRef: ' + r.part_number : '') + "\n\nFrom Sylvia's Surprises — Antiques, Collectibles & More, Isle of Man.");
     setPrice(String(r.on_offer && r.offer_price > 0 ? r.offer_price : r.rrp || ''));
@@ -276,7 +294,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
     setBusy(true); setResult(null);
     try {
       const d = await api('/api/ebay/list', { stock_id: item.id, title, description: desc, price: p, qty: n, category_id: cat!.id, condition, aspects: aspectVals });
-      setResult({ kind: 'ok', text: '✅ Listed on eBay' + (d.photo ? '' : ' (no photo — add one in Stock Control and list again for better sales)'), url: d.url });
+      setResult({ kind: 'ok', text: '✅ Listed on eBay' + (d.photo ? ' with ' + (d.photos || 1) + ' photo' + ((d.photos || 1) === 1 ? '' : 's') : ' (no photo — add some in Stock Control and list again for better sales)'), url: d.url });
       setItem(null); onListed();
     } catch (err: any) { setResult({ kind: 'err', text: err.message }); onListed(); }
     setBusy(false);
@@ -310,6 +328,14 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
             <div style={{ flex: 1, fontSize: 13 }}><b>{item.part_number || '—'}</b> {item.description}<div style={{ color: '#6b7280' }}>In stock: {item.qty}</div></div>
             <button style={btn('#6b7280', true)} onClick={() => setItem(null)}>Change</button>
           </div>
+          {pics.length > 0 && (
+            <div style={{ margin: '8px 0' }}>
+              <span style={label}>Photos going to eBay ({pics.length}) — main photo first</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {pics.map((p, i) => <img key={i} src={p.photo} alt="" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6, border: p.is_main ? '2px solid #16a34a' : '1px solid #e5e7eb' }} title={p.is_main ? 'Main photo' : ''} />)}
+              </div>
+            </div>
+          )}
           {!item.photo && <Msg kind="info">This item has no photo. eBay listings sell much better with one — add it in Stock Control first if you can.</Msg>}
           <span style={label}>eBay title ({title.length}/80)</span>
           <input style={input} value={title} maxLength={80} onChange={e => setTitle(e.target.value)} />{fe('title')}

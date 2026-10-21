@@ -200,6 +200,22 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     if (/^https?:\/\//.test(photo)) return res.redirect(photo);
     res.status(404).end();
   });
+  app.get('/ebay-photo/:id/:pid.jpg', (req, res) => {
+    const row = db.prepare('SELECT photo FROM sylvias_stock_photos WHERE id = ? AND stock_id = ?').get(Number(req.params.pid), Number(req.params.id));
+    const photo = row && row.photo;
+    if (!photo) return res.status(404).end();
+    const m = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(photo);
+    if (m) { res.set('Content-Type', m[1]); res.set('Cache-Control', 'public, max-age=3600'); return res.send(Buffer.from(m[2], 'base64')); }
+    if (/^https?:\/\//.test(photo)) return res.redirect(photo);
+    res.status(404).end();
+  });
+  function imageUrls(req, stock) {
+    let rows = [];
+    try { rows = db.prepare('SELECT id, photo FROM sylvias_stock_photos WHERE stock_id = ? ORDER BY is_main DESC, sort_order, id').all(stock.id); } catch (e) { rows = []; }
+    if (!rows.length) { const one = photoUrl(req, stock.id, stock.photo); return one ? [one] : []; }
+    const host = req.get('host');
+    return rows.slice(0, 12).map(r => /^https:\/\//.test(r.photo) ? r.photo : 'https://' + host + '/ebay-photo/' + stock.id + '/' + r.id + '.jpg?v=' + crypto.createHash('md5').update(r.photo).digest('hex').slice(0, 8));
+  }
   function photoUrl(req, stockId, photo) {
     if (!photo) return null;
     if (/^https:\/\//.test(photo)) return photo;
@@ -222,11 +238,11 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     const categoryId = String(b.category_id || '').replace(/\D/g, ''); if (!categoryId) throw new Error('Choose an eBay category');
     const description = String(b.description || title).trim();
     const sku = 'SS-' + stock.id;
-    const img = photoUrl(req, stock.id, stock.photo);
+    const imgs = imageUrls(req, stock);
     const aspects = {};
     for (const [k, v] of Object.entries(b.aspects || {})) { const val = String(v || '').trim(); if (val) aspects[k] = [val]; }
     const product = { title, description, aspects };
-    if (img) product.imageUrls = [img];
+    if (imgs.length) product.imageUrls = imgs;
     const item = { availability: { shipToLocationAvailability: { quantity: qty } }, product };
     if (b.condition) item.condition = b.condition;
     await ebay('PUT', '/sell/inventory/v1/inventory_item/' + encodeURIComponent(sku), item);
@@ -242,7 +258,7 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
       throw new Error('eBay would not publish it: ' + e.message);
     }
     db.prepare(`INSERT INTO sylvias_ebay_listings (stock_id, sku, offer_id, listing_id, title, price, qty, category_id, condition, status, note, listed_by) VALUES (?,?,?,?,?,?,?,?,?,'listed','',?) ON CONFLICT(sku) DO UPDATE SET offer_id=excluded.offer_id, listing_id=excluded.listing_id, title=excluded.title, price=excluded.price, qty=excluded.qty, category_id=excluded.category_id, condition=excluded.condition, status='listed', note='', updated_at=datetime('now')`).run(stock.id, sku, offerId, listingId, title, price, qty, categoryId, b.condition || '', req.session.user?.initials || '');
-    return { ok: true, listingId, url: listingId ? VIEW + listingId : null, photo: !!img };
+    return { ok: true, listingId, url: listingId ? VIEW + listingId : null, photo: imgs.length > 0, photos: imgs.length };
   }));
 
   // ── end a listing ──

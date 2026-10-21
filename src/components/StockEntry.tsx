@@ -6,7 +6,7 @@ import {
   addStockItem, addPurchasedStockItem, updateStockItem, CATEGORIES, LOCATIONS, STOCK_PAYMENT_METHODS,
   getLearnedItemNames, titleCase, getStaffUsers, getAllStock, findPartNumberClash,
   getAllSuppliers, addSupplier, SOURCE_TYPES, getCategories, getLocations,
-  addSupplierInvoice,
+  addSupplierInvoice, getStockPhotos, saveStockPhotos, StockPhoto,
 } from '../utils/db';
 import { ScanEntry } from './ScanEntry';
 
@@ -23,7 +23,9 @@ type AcquisitionType = 'existing' | 'purchased';
 export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, onSaved, onCancel, onNavigate }) => {
   const [partNumber, setPartNumber] = useState('');
   const [description, setDescription] = useState('');
-  const [photo, setPhoto] = useState('');
+  const [photos, setPhotos] = useState<StockPhoto[]>([]);
+  const photo = (photos.find(p => p.is_main) || photos[0])?.photo || '';
+  const MAX_PHOTOS = 12;
   const [qty, setQty] = useState('1');
   const [location, setLocation] = useState('');
   const [cost, setCost] = useState('');
@@ -48,35 +50,60 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState('');
 
-  /* Read an image file, shrink to max 800px and save as compact JPEG */
-  function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoError('');
-    if (!file.type.startsWith('image/')) { setPhotoError('Please choose a picture file.'); return; }
-    setPhotoBusy(true);
-    const reader = new FileReader();
-    reader.onerror = () => { setPhotoBusy(false); setPhotoError('Could not read that picture.'); };
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => { setPhotoBusy(false); setPhotoError('That picture format is not supported — try a JPG or PNG.'); };
-      img.onload = () => {
-        const max = 800;
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { setPhotoBusy(false); setPhotoError('Could not process that picture.'); return; }
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setPhoto(canvas.toDataURL('image/jpeg', 0.72));
-        setPhotoBusy(false);
+  /* Shrink a picture file to max 1200px and return a compact JPEG */
+  function shrinkFile(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) { reject(new Error('Please choose picture files only.')); return; }
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read that picture.'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('That picture format is not supported — try a JPG or PNG.'));
+        img.onload = () => {
+          const max = 1200;
+          const scale = Math.min(1, max / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('Could not process that picture.')); return; }
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+        };
+        img.src = reader.result as string;
       };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handlePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    setPhotoError('');
+    const room = MAX_PHOTOS - photos.length;
+    if (room <= 0) { setPhotoError('Maximum ' + MAX_PHOTOS + ' photos per item.'); return; }
+    setPhotoBusy(true);
+    const added: string[] = [];
+    for (const f of files.slice(0, room)) {
+      try { added.push(await shrinkFile(f)); } catch (err: any) { setPhotoError(err.message); }
+    }
+    if (files.length > room) setPhotoError('Only ' + room + ' more photo' + (room === 1 ? '' : 's') + ' could be added (maximum ' + MAX_PHOTOS + ').');
+    setPhotos(prev => {
+      const hasMain = prev.some(p => p.is_main);
+      return [...prev, ...added.map((ph, i) => ({ photo: ph, is_main: !hasMain && prev.length === 0 && i === 0 }))];
+    });
+    setPhotoBusy(false);
+  }
+  function setMainPhoto(idx: number) { setPhotos(prev => prev.map((p, i) => ({ ...p, is_main: i === idx }))); }
+  function removePhoto(idx: number) {
+    setPhotos(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      if (next.length && !next.some(p => p.is_main)) next[0] = { ...next[0], is_main: true };
+      return next;
+    });
   }
 
   /* Live duplicate part-number check */
@@ -156,7 +183,8 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
     if (editItem) {
       setPartNumber(editItem.part_number);
       setDescription(editItem.description);
-      setPhoto(editItem.photo);
+      setPhotos(editItem.photo ? [{ photo: editItem.photo, is_main: true }] : []);
+      getStockPhotos(editItem.id).then(list => { if (list.length) setPhotos(list); }).catch(() => {});
       setQty(String(editItem.qty));
       setLocation(editItem.location);
       setCost(String(editItem.cost));
@@ -303,6 +331,17 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   async function doSave() {
     setSaving(true);
     const npi = noPartInitials.trim().toUpperCase();
+    const photosToSave = photos;
+    let photoWarn = '';
+    // After a new item is added, attach all its photos (main one is already on the item)
+    const attachNewPhotos = async () => {
+      if (photosToSave.length <= 1) return;
+      try {
+        const rows = await window.tasklet.sqlQuery('SELECT id, description FROM sylvias_stock ORDER BY id DESC LIMIT 1') as any[];
+        if (rows[0] && String(rows[0].description) === description.trim()) await saveStockPhotos(Number(rows[0].id), photosToSave);
+        else photoWarn = ' (extra photos not saved — open the item and add them again)';
+      } catch { photoWarn = ' (extra photos not saved — open the item and add them again)'; }
+    };
     try {
       if (editItem) {
         await updateStockItem({
@@ -320,7 +359,8 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
           purchased_by: acquisitionType === 'purchased' ? purchasedBy : (editItem.purchased_by || ''),
           no_partnumber_initials: !partNumber.trim() ? npi : '',
         });
-        setSuccess('Item updated successfully! ✅');
+        try { await saveStockPhotos(editItem.id, photosToSave); } catch { photoWarn = ' (photos not saved — please try again)'; }
+        setSuccess('Item updated successfully! ✅' + photoWarn);
       } else if (acquisitionType === 'purchased') {
         await addPurchasedStockItem({
           part_number: partNumber.trim(),
@@ -333,6 +373,7 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
           purchased_by: purchasedBy,
           no_partnumber_initials: npi,
         });
+        await attachNewPhotos();
         // If on account, create a supplier invoice
         if (onAccount) {
           const totalCost = (parseFloat(cost) || 0) * (parseInt(qty) || 1);
@@ -348,9 +389,9 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
             notes: `Stock entry by ${currentUser.initials}`,
             entered_by: currentUser.initials,
           });
-          setSuccess('Purchase recorded & supplier invoice created! ✅');
+          setSuccess('Purchase recorded & supplier invoice created! ✅' + photoWarn);
         } else {
-          setSuccess('Purchase recorded & added to stock! ✅');
+          setSuccess('Purchase recorded & added to stock! ✅' + photoWarn);
         }
         resetForm();
       } else {
@@ -362,7 +403,8 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
           entered_by: currentUser.initials, category,
           no_partnumber_initials: npi,
         });
-        setSuccess('Item added to stock! ✅');
+        await attachNewPhotos();
+        setSuccess('Item added to stock! ✅' + photoWarn);
         resetForm();
       }
 
@@ -374,7 +416,7 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   }
 
   function resetForm() {
-    setDescription(''); setPhoto(''); setQty('1'); setLocation('');
+    setDescription(''); setPhotos([]); setQty('1'); setLocation('');
     setCost(''); setRrp(''); setCategory('Other');
     setAcquisitionType('existing');
     setSupplierId(null); setSourceType('');
@@ -678,28 +720,36 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
             </div>
           )}
 
-          {/* Photo — take with camera or choose file (auto-shrunk) */}
+          {/* Photos — up to 12, one ticked as main (auto-shrunk) */}
           <div className="form-control">
-            <label className="label"><span className="label-text font-semibold">Photo</span></label>
+            <label className="label"><span className="label-text font-semibold">Photos <span className="font-normal text-base-content/60">({photos.length}/{MAX_PHOTOS}{photos.length > 0 ? ' · tick the main photo' : ''})</span></span></label>
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoFile} />
-            <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoFile} />
-            {!photo ? (
+            <input ref={photoRef} type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoFile} />
+            {photos.length > 0 && (
+              <div className="flex flex-wrap gap-3 mb-2">
+                {photos.map((p, i) => (
+                  <div key={i} className={`relative rounded-lg border-2 p-1 ${p.is_main ? 'border-success bg-success/10' : 'border-base-300'}`} style={{ width: 104 }}>
+                    <img src={p.photo} alt={'Photo ' + (i + 1)} className="rounded object-cover" style={{ width: 92, height: 92 }} />
+                    <button type="button" className="btn btn-circle btn-xs btn-error absolute -top-2 -right-2" title="Remove photo" onClick={() => removePhoto(i)}>
+                      <X className="h-3 w-3" />
+                    </button>
+                    <label className="flex items-center gap-1 mt-1 cursor-pointer text-xs whitespace-nowrap">
+                      <input type="checkbox" className="checkbox checkbox-success checkbox-xs" checked={p.is_main} onChange={() => setMainPhoto(i)} />
+                      {p.is_main ? <b>⭐ Main</b> : 'Main photo'}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+            {photos.length < MAX_PHOTOS && (
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn btn-outline btn-sm gap-1" onClick={() => cameraRef.current?.click()} disabled={photoBusy}>
                   <Camera className="h-4 w-4" /> 📷 Take Photo
                 </button>
                 <button type="button" className="btn btn-outline btn-sm gap-1" onClick={() => photoRef.current?.click()} disabled={photoBusy}>
-                  📁 Choose File
+                  📁 Choose Files
                 </button>
                 {photoBusy && <span className="loading loading-spinner loading-sm self-center" />}
-              </div>
-            ) : (
-              <div className="relative inline-block w-fit">
-                <img src={photo} alt="Item photo" className="rounded-lg max-h-40 object-contain border border-base-300" />
-                <button type="button" className="btn btn-circle btn-xs btn-error absolute -top-2 -right-2" title="Remove photo"
-                  onClick={() => { setPhoto(''); if (photoRef.current) photoRef.current.value = ''; if (cameraRef.current) cameraRef.current.value = ''; }}>
-                  <X className="h-3 w-3" />
-                </button>
               </div>
             )}
             {photoError && <p className="text-error text-sm mt-1">{photoError}</p>}

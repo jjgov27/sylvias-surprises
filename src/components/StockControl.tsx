@@ -7,10 +7,11 @@ import { CsvImport, CsvField } from './CsvImport';
 interface StockControlProps {
   currentUser: StaffUser;
   onEdit: (item: StockItem) => void;
+  onListOnEbay?: (item: StockItem) => void;
   onAddNew: () => void;
 }
 
-export const StockControl: React.FC<StockControlProps> = ({ currentUser, onEdit, onAddNew }) => {
+export const StockControl: React.FC<StockControlProps> = ({ currentUser, onEdit, onAddNew, onListOnEbay }) => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [filteredStock, setFilteredStock] = useState<StockItem[]>([]);
   const [search, setSearch] = useState('');
@@ -440,6 +441,9 @@ export const StockControl: React.FC<StockControlProps> = ({ currentUser, onEdit,
                         <button className="btn btn-ghost btn-xs" title="Put on offer" onClick={() => { setOfferItemId(item.id); setOfferPrice(String(Math.round(item.rrp * 0.8 * 100) / 100)); }}>
                           <Tag size={14} />
                         </button>
+                      )}
+                      {onListOnEbay && item.qty > 0 && (
+                        <button className="btn btn-ghost btn-xs" title="List on eBay" onClick={() => onListOnEbay(item)}>🛒</button>
                       )}
                       <button className="btn btn-ghost btn-xs" onClick={() => onEdit(item)}>
                         <Edit size={14} />

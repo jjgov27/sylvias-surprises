@@ -872,6 +872,7 @@ export default function App() {
             currentUser={currentUser}
             onEdit={handleEdit}
             onAddNew={handleAddNew}
+            onListOnEbay={(it) => { try { sessionStorage.setItem('ebay_list_stock_id', String(it.id)); } catch {} setView('admin'); }}
           />
         )}
       </main>
