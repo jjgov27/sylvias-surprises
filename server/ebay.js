@@ -26,6 +26,20 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
   db.exec(`CREATE TABLE IF NOT EXISTS sylvias_ebay_listings (id INTEGER PRIMARY KEY AUTOINCREMENT, stock_id INTEGER NOT NULL, sku TEXT NOT NULL UNIQUE, offer_id TEXT NOT NULL DEFAULT '', listing_id TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '', price REAL NOT NULL DEFAULT 0, qty INTEGER NOT NULL DEFAULT 1, category_id TEXT NOT NULL DEFAULT '', condition TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'listed', note TEXT NOT NULL DEFAULT '', listed_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))`);
   db.exec(`CREATE TABLE IF NOT EXISTS sylvias_ebay_orders (order_id TEXT PRIMARY KEY, sale_id INTEGER, buyer TEXT NOT NULL DEFAULT '', total REAL NOT NULL DEFAULT 0, postage REAL NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))`);
 
+  for (const sql of [
+    "ALTER TABLE sylvias_ebay_listings ADD COLUMN postage REAL",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN ship_name TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN ship_address TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN ship_phone TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN buyer_username TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN line_items TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN status TEXT NOT NULL DEFAULT 'to_post'",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN carrier TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN tracking TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN posted_at TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE sylvias_ebay_orders ADD COLUMN posted_by TEXT NOT NULL DEFAULT ''",
+  ]) { try { db.exec(sql); } catch (e) { /* column exists */ } }
+
   // ── private store (tokens + setup) ──
   function load() { try { return JSON.parse(fs.readFileSync(STORE, 'utf8')); } catch { return {}; } }
   function save(s) { fs.writeFileSync(STORE, JSON.stringify(s, null, 2), { mode: 0o600 }); }
@@ -246,7 +260,10 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     const item = { availability: { shipToLocationAvailability: { quantity: qty } }, product };
     if (b.condition) item.condition = b.condition;
     await ebay('PUT', '/sell/inventory/v1/inventory_item/' + encodeURIComponent(sku), item);
+    const postage = b.postage === '' || b.postage == null ? null : Number(b.postage);
+    if (postage != null && !(postage >= 0)) throw new Error('Postage must be a number (0 for free postage)');
     const offer = { sku, marketplaceId: MKT, format: 'FIXED_PRICE', availableQuantity: qty, categoryId, listingDescription: description, merchantLocationKey: s.setup.location, pricingSummary: { price: { value: price.toFixed(2), currency: 'GBP' } }, listingPolicies: { fulfillmentPolicyId: s.setup.fulfillment.id, paymentPolicyId: s.setup.payment.id, returnPolicyId: s.setup.return.id } };
+    if (postage != null) offer.listingPolicies.shippingCostOverrides = [{ priority: 1, shippingServiceType: 'DOMESTIC', shippingCost: { value: postage.toFixed(2), currency: 'GBP' } }];
     let offerId;
     const existing = await ebay('GET', '/sell/inventory/v1/offer?sku=' + encodeURIComponent(sku) + '&marketplace_id=' + MKT).catch(() => ({}));
     if (existing.offers && existing.offers[0]) { offerId = existing.offers[0].offerId; await ebay('PUT', '/sell/inventory/v1/offer/' + offerId, offer); }
@@ -257,7 +274,7 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
       db.prepare(`INSERT INTO sylvias_ebay_listings (stock_id, sku, offer_id, title, price, qty, category_id, condition, status, note, listed_by) VALUES (?,?,?,?,?,?,?,?,'error',?,?) ON CONFLICT(sku) DO UPDATE SET offer_id=excluded.offer_id, title=excluded.title, price=excluded.price, qty=excluded.qty, category_id=excluded.category_id, condition=excluded.condition, status='error', note=excluded.note, updated_at=datetime('now')`).run(stock.id, sku, offerId, title, price, qty, categoryId, b.condition || '', e.message.slice(0, 500), req.session.user?.initials || '');
       throw new Error('eBay would not publish it: ' + e.message);
     }
-    db.prepare(`INSERT INTO sylvias_ebay_listings (stock_id, sku, offer_id, listing_id, title, price, qty, category_id, condition, status, note, listed_by) VALUES (?,?,?,?,?,?,?,?,?,'listed','',?) ON CONFLICT(sku) DO UPDATE SET offer_id=excluded.offer_id, listing_id=excluded.listing_id, title=excluded.title, price=excluded.price, qty=excluded.qty, category_id=excluded.category_id, condition=excluded.condition, status='listed', note='', updated_at=datetime('now')`).run(stock.id, sku, offerId, listingId, title, price, qty, categoryId, b.condition || '', req.session.user?.initials || '');
+    db.prepare(`INSERT INTO sylvias_ebay_listings (stock_id, sku, offer_id, listing_id, title, price, qty, category_id, condition, status, note, listed_by, postage) VALUES (?,?,?,?,?,?,?,?,?,'listed','',?,?) ON CONFLICT(sku) DO UPDATE SET offer_id=excluded.offer_id, listing_id=excluded.listing_id, title=excluded.title, price=excluded.price, qty=excluded.qty, category_id=excluded.category_id, condition=excluded.condition, status='listed', note='', postage=excluded.postage, updated_at=datetime('now')`).run(stock.id, sku, offerId, listingId, title, price, qty, categoryId, b.condition || '', req.session.user?.initials || '', postage);
     return { ok: true, listingId, url: listingId ? VIEW + listingId : null, photo: imgs.length > 0, photos: imgs.length };
   }));
 
@@ -280,8 +297,9 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
 
   app.get('/api/ebay/listings', requireAuth, wrap(async () => {
     const rows = db.prepare(`SELECT l.*, s.part_number, s.description AS stock_description, s.qty AS stock_qty FROM sylvias_ebay_listings l LEFT JOIN sylvias_stock s ON s.id = l.stock_id ORDER BY CASE l.status WHEN 'listed' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, l.updated_at DESC LIMIT 300`).all();
-    const orders = db.prepare(`SELECT o.*, sa.invoice_number FROM sylvias_ebay_orders o LEFT JOIN sylvias_sales sa ON sa.id = o.sale_id ORDER BY o.created_at DESC LIMIT 30`).all();
-    return { listings: rows.map(r => ({ ...r, url: r.listing_id ? VIEW + r.listing_id : null })), orders };
+    const orders = db.prepare(`SELECT o.*, sa.invoice_number FROM sylvias_ebay_orders o LEFT JOIN sylvias_sales sa ON sa.id = o.sale_id WHERE o.sale_id IS NOT NULL ORDER BY CASE o.status WHEN 'to_post' THEN 0 ELSE 1 END, o.created_at DESC LIMIT 50`).all();
+    const alert = db.prepare(`SELECT value FROM sylvias_settings WHERE key = 'ebay_alert_webhook'`).get();
+    return { listings: rows.map(r => ({ ...r, url: r.listing_id ? VIEW + r.listing_id : null })), orders, alertSet: !!(alert && alert.value) };
   }));
 
   // ── sync: eBay sales → Sylvia's, and shop sales → end eBay listings ──
@@ -318,8 +336,13 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
       db.prepare(`UPDATE sylvias_ebay_listings SET qty = ?, status = CASE WHEN ? <= 0 THEN 'sold' ELSE status END, note = ?, updated_at = datetime('now') WHERE id = ?`).run(left, left, 'Sold on eBay — ' + inv, x.listing.id);
     }
     db.prepare(`INSERT INTO sylvias_payments (sale_id, payment_date, amount, payment_method, notes, entered_by) VALUES (?, ?, ?, 'ebay', ?, 'eBay')`).run(saleId, saleDate.slice(0, 10), total, 'eBay order ' + order.orderId);
-    db.prepare(`INSERT INTO sylvias_ebay_orders (order_id, sale_id, buyer, total, postage, note) VALUES (?,?,?,?,?,?)`).run(order.orderId, saleId, custName, total, postage, inv);
-    return { invoice: inv, total };
+    const st = order.fulfillmentStartInstructions?.[0]?.shippingStep?.shipTo || {};
+    const a = st.contactAddress || {};
+    const addr = [a.addressLine1, a.addressLine2, a.city, a.stateOrProvince, a.postalCode, a.countryCode && a.countryCode !== 'GB' ? a.countryCode : ''].map(x => String(x || '').trim()).filter(Boolean).join('\n');
+    const phone = st.primaryPhone?.phoneNumber || '';
+    const li = lines.map(x => ({ lineItemId: x.li.lineItemId, quantity: x.q, title: x.stock?.description || x.li.title || '', part_number: x.stock?.part_number || '', unit: x.unit, total: x.lineTotal }));
+    db.prepare(`INSERT INTO sylvias_ebay_orders (order_id, sale_id, buyer, total, postage, note, ship_name, ship_address, ship_phone, buyer_username, line_items, status) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'to_post')`).run(order.orderId, saleId, custName, total, postage, inv, st.fullName || '', addr, phone, buyer, JSON.stringify(li));
+    return { invoice: inv, total, postage, buyer: st.fullName || buyer, address: addr, items: li.map(x => (x.part_number ? x.part_number + ' ' : '') + x.title + (x.quantity > 1 ? ' ×' + x.quantity : '')) };
   });
 
   let syncing = false;
@@ -339,6 +362,17 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
         catch (e) { result.errors.push('Order ' + order.orderId + ': ' + e.message); }
       }
       // 2. Items sold in the shop → end or reduce eBay listing
+      await checkShopSales(result);
+    } catch (e) { result.errors.push(e.message); }
+    finally {
+      syncing = false;
+      const s = load(); s.last_sync = result; save(s);
+    }
+    if (result.newSales.length) notifySales(result.newSales).catch(e => console.error('eBay alert:', e.message));
+    return result;
+  }
+
+  async function checkShopSales(result) {
       const live = db.prepare(`SELECT l.*, s.qty AS stock_qty FROM sylvias_ebay_listings l LEFT JOIN sylvias_stock s ON s.id = l.stock_id WHERE l.status = 'listed'`).all();
       for (const row of live) {
         try {
@@ -351,13 +385,81 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
           }
         } catch (e) { result.errors.push(row.title + ': ' + e.message); }
       }
-    } catch (e) { result.errors.push(e.message); }
-    finally {
-      syncing = false;
-      const s = load(); s.last_sync = result; save(s);
-    }
-    return result;
   }
+
+  // ── alert (email via Tasklet webhook link saved in Admin → eBay) ──
+  async function notifySales(sales) {
+    const row = db.prepare(`SELECT value FROM sylvias_settings WHERE key = 'ebay_alert_webhook'`).get();
+    const url = row && String(row.value || '').trim();
+    if (!url || !/^https:\/\//.test(url)) return;
+    const testMode = process.env.TEST_MODE === 'true';
+    for (const x of sales) {
+      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'ebay_sale', site: testMode ? 'TEST site' : 'LIVE shop', ebay: ENV, invoice: x.invoice, total: x.total, postage: x.postage || 0, buyer: x.buyer, address: x.address, items: x.items }) }).catch(e => console.error('eBay alert send:', e.message));
+    }
+  }
+
+  // ── shop sale → end eBay listing straight away (called when stock changes) ──
+  let shopTimer = null, shopBusy = false;
+  function stockChanged() {
+    if (!configured() || !load().refresh_token) return;
+    clearTimeout(shopTimer);
+    shopTimer = setTimeout(async () => {
+      if (shopBusy || syncing) return;
+      if (!db.prepare(`SELECT 1 FROM sylvias_ebay_listings l LEFT JOIN sylvias_stock s ON s.id = l.stock_id WHERE l.status = 'listed' AND (s.id IS NULL OR s.qty < l.qty) LIMIT 1`).get()) return;
+      shopBusy = true;
+      const r = { ended: [], qtyUpdated: 0, errors: [] };
+      try { await checkShopSales(r); } catch (e) { console.error('eBay end-on-sale:', e.message); }
+      finally { shopBusy = false; }
+      if (r.ended.length || r.qtyUpdated) console.log('eBay: ended ' + r.ended.length + ' listing(s) after shop sale');
+    }, 2000);
+  }
+
+  // ── orders: packing slip details + mark as posted ──
+  app.get('/api/ebay/order/:id', requireAuth, wrap(async (req) => {
+    const o = db.prepare(`SELECT o.*, sa.invoice_number, sa.sale_date FROM sylvias_ebay_orders o LEFT JOIN sylvias_sales sa ON sa.id = o.sale_id WHERE o.order_id = ?`).get(String(req.params.id));
+    if (!o) throw new Error('Order not found');
+    let items = []; try { items = JSON.parse(o.line_items || '[]'); } catch {}
+    if (!items.length && o.sale_id) items = db.prepare('SELECT part_number, description AS title, qty AS quantity, unit_price AS unit, line_total AS total FROM sylvias_sale_items WHERE sale_id = ?').all(o.sale_id);
+    return { ...o, items };
+  }));
+  const CARRIERS = { 'Isle of Man Post': '', 'Royal Mail': 'ROYAL_MAIL', 'Parcelforce': 'PARCELFORCE', 'DPD': 'DPD', 'Evri': 'HERMES', 'Other': 'OTHER' };
+  app.post('/api/ebay/mark-posted', requireAuth, wrap(async (req) => {
+    const b = req.body || {};
+    const o = db.prepare('SELECT * FROM sylvias_ebay_orders WHERE order_id = ?').get(String(b.order_id || ''));
+    if (!o) throw new Error('Order not found');
+    const carrier = String(b.carrier || 'Isle of Man Post');
+    const tracking = String(b.tracking || '').replace(/\s+/g, '').toUpperCase();
+    let items = []; try { items = JSON.parse(o.line_items || '[]'); } catch {}
+    const body = { lineItems: items.filter(x => x.lineItemId).map(x => ({ lineItemId: x.lineItemId, quantity: x.quantity || 1 })), shippedDate: new Date().toISOString() };
+    if (tracking) { body.trackingNumber = tracking; body.shippingCarrierCode = CARRIERS[carrier] || 'OTHER'; if (!body.shippingCarrierCode) body.shippingCarrierCode = 'OTHER'; }
+    let note = '';
+    if (body.lineItems.length) {
+      try { await ebay('POST', '/sell/fulfillment/v1/order/' + encodeURIComponent(o.order_id) + '/shipping_fulfillment', body); note = 'eBay told — buyer notified'; }
+      catch (e) {
+        if (!tracking) throw new Error('eBay would not mark it posted: ' + e.message);
+        // retry without tracking if eBay doesn't recognise the carrier
+        delete body.trackingNumber; delete body.shippingCarrierCode;
+        await ebay('POST', '/sell/fulfillment/v1/order/' + encodeURIComponent(o.order_id) + '/shipping_fulfillment', body);
+        note = 'Marked posted on eBay without tracking (eBay did not accept the tracking number: ' + e.message + ')';
+      }
+    } else note = 'Older order — mark it posted in eBay too';
+    db.prepare(`UPDATE sylvias_ebay_orders SET status = 'posted', carrier = ?, tracking = ?, posted_at = datetime('now'), posted_by = ? WHERE order_id = ?`).run(carrier, tracking, req.session.user?.initials || '', o.order_id);
+    return { ok: true, note };
+  }));
+  app.post('/api/ebay/alert-link', requireAuth, wrap(async (req) => {
+    const url = String(req.body?.url || '').trim();
+    if (url && !/^https:\/\/webhooks\.tasklet\.ai\//.test(url)) throw new Error('That doesn’t look like the alert link — it should start https://webhooks.tasklet.ai/');
+    db.prepare(`INSERT OR REPLACE INTO sylvias_settings (key, value) VALUES ('ebay_alert_webhook', ?)`).run(url);
+    return { ok: true, set: !!url };
+  }));
+  app.post('/api/ebay/alert-test', requireAuth, wrap(async () => {
+    const row = db.prepare(`SELECT value FROM sylvias_settings WHERE key = 'ebay_alert_webhook'`).get();
+    if (!row || !row.value) throw new Error('No alert link saved');
+    const r = await fetch(row.value, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'ebay_sale', test: true, site: process.env.TEST_MODE === 'true' ? 'TEST site' : 'LIVE shop', ebay: ENV, invoice: 'TEST', total: 0, postage: 0, buyer: 'Test alert', address: '', items: ['This is a test — no sale has happened'] }) });
+    if (!r.ok) throw new Error('The alert link was rejected (' + r.status + ') — check it was copied in full');
+    return { ok: true };
+  }));
   app.post('/api/ebay/sync', requireAuth, wrap(async () => sync()));
   setInterval(() => { if (configured() && load().refresh_token) sync().catch(e => console.error('eBay sync:', e.message)); }, 10 * 60 * 1000);
+  return { stockChanged };
 };

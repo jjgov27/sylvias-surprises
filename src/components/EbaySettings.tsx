@@ -5,7 +5,50 @@ type Setup = { fulfillment: Pol; payment: Pol; return: Pol; location: string | n
 type SyncResult = { at: string; newSales: { invoice: string; total: number }[]; ended: string[]; qtyUpdated: number; errors: string[] } | null;
 type Status = { configured: boolean; env: string; appIdHint: string | null; hasRuName: boolean; keysOk: boolean; apiOk: boolean; categoryTreeId: string | null; connected: boolean; connectedAt: string | null; setup: Setup; lastSync: SyncResult; error: string | null };
 type Listing = { id: number; stock_id: number; sku: string; listing_id: string; title: string; price: number; qty: number; status: string; note: string; part_number: string | null; stock_qty: number | null; updated_at: string; url: string | null };
-type Order = { order_id: string; sale_id: number | null; buyer: string; total: number; postage: number; note: string; invoice_number: string | null; created_at: string };
+type Order = { order_id: string; sale_id: number | null; buyer: string; total: number; postage: number; note: string; invoice_number: string | null; created_at: string; ship_name?: string; ship_address?: string; ship_phone?: string; buyer_username?: string; status?: string; carrier?: string; tracking?: string; posted_at?: string; posted_by?: string };
+type OrderDetail = Order & { sale_date?: string; items: { part_number?: string; title: string; quantity: number; unit: number; total: number }[] };
+
+const SHOP = { name: "Sylvia's Surprises", lines: ['Memorial Hall, Main Road', 'Union Mills', 'Isle of Man', 'IM4 4AD'], phone: '07624 433076', email: 'gavin@sylviassurprises.im' };
+const h = (x: any) => String(x ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function printHtml(title: string, body: string, css = '') {
+  const win = window.open('', '_blank', 'width=820,height=1000');
+  if (!win) { alert('Please allow pop-ups for this site to print.'); return; }
+  win.document.write(`<html><head><title>${h(title)}</title><style>body{font-family:Helvetica,Arial,sans-serif;color:#222;margin:0;padding:28px}table{border-collapse:collapse;width:100%}th,td{padding:7px 8px;border-bottom:1px solid #ddd;text-align:left;font-size:13px}th{background:#f3f4f6}.r{text-align:right}.brand{color:#7c3aed}@media print{body{padding:12mm}.pb{page-break-before:always}}${css}</style></head><body>${body}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 450);
+}
+function addrHtml(o: OrderDetail) { return `<b>${h(o.ship_name || o.buyer)}</b><br>${h(o.ship_address || '').replace(/\n/g, '<br>')}`; }
+function packingSlipHtml(o: OrderDetail) {
+  const date = (o.sale_date || o.created_at || '').slice(0, 10).split('-').reverse().join('/');
+  const rows = o.items.map(i => `<tr><td>${h(i.part_number || '')}</td><td>${h(i.title)}</td><td class="r">${i.quantity}</td><td class="r">£${Number(i.unit || 0).toFixed(2)}</td><td class="r">£${Number(i.total || 0).toFixed(2)}</td></tr>`).join('');
+  const post = Number(o.postage || 0);
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #7c3aed;padding-bottom:12px">
+    <div><div class="brand" style="font-size:26px;font-weight:700">${SHOP.name}</div><div style="font-size:12px;color:#555">Antiques, Collectibles &amp; More<br>${SHOP.lines.join(', ')}<br>${SHOP.phone} · ${SHOP.email}</div></div>
+    <div style="text-align:right"><div style="font-size:22px;font-weight:700">INVOICE</div><div style="font-size:13px">No. <b>${h(o.invoice_number || '')}</b><br>Date ${h(date)}<br>eBay order ${h(o.order_id)}</div><div style="margin-top:6px;display:inline-block;background:#dcfce7;color:#166534;font-weight:700;padding:3px 10px;border-radius:10px;font-size:12px">PAID via eBay</div></div>
+  </div>
+  <div style="display:flex;gap:40px;margin:18px 0"><div><div style="font-size:11px;color:#777;text-transform:uppercase">Deliver to</div><div style="font-size:14px;line-height:1.45">${addrHtml(o)}</div>${o.ship_phone ? `<div style="font-size:12px;color:#555">Tel ${h(o.ship_phone)}</div>` : ''}</div><div><div style="font-size:11px;color:#777;text-transform:uppercase">eBay buyer</div><div style="font-size:14px">${h(o.buyer_username || '')}</div></div></div>
+  <table><thead><tr><th>Part no.</th><th>Item</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead><tbody>${rows}</tbody></table>
+  <table style="width:280px;margin-left:auto;margin-top:10px"><tr><td>Items</td><td class="r">£${Number(o.total || 0).toFixed(2)}</td></tr><tr><td>Postage</td><td class="r">£${post.toFixed(2)}</td></tr><tr><td><b>Paid by buyer</b></td><td class="r"><b>£${(Number(o.total || 0) + post).toFixed(2)}</b></td></tr><tr><td style="color:#166534">Amount paid</td><td class="r" style="color:#166534">£${(Number(o.total || 0) + post).toFixed(2)}</td></tr><tr><td>Balance due</td><td class="r">£0.00</td></tr></table>
+  <div class="pb"></div>
+  <div style="margin-top:30px;border-top:2px dashed #999;padding-top:16px">
+    <div style="font-size:20px;font-weight:700">PACKING SLIP</div>
+    <div style="font-size:13px;color:#555;margin-bottom:10px">Invoice ${h(o.invoice_number || '')} · eBay order ${h(o.order_id)}</div>
+    <div style="font-size:14px;line-height:1.45;margin-bottom:12px">${addrHtml(o)}</div>
+    <table><thead><tr><th style="width:30px">✓</th><th>Part no.</th><th>Item</th><th class="r">Qty</th></tr></thead><tbody>${o.items.map(i => `<tr><td><div style="width:16px;height:16px;border:1.5px solid #333"></div></td><td>${h(i.part_number || '')}</td><td>${h(i.title)}</td><td class="r">${i.quantity}</td></tr>`).join('')}</tbody></table>
+    <div style="margin-top:20px;font-size:13px">Packed by: ____________ &nbsp;&nbsp; Date: ____________</div>
+    <div style="margin-top:22px;font-size:12px;color:#555">Thank you for buying from ${SHOP.name}! If anything is wrong, please message us through eBay before leaving feedback.</div>
+  </div>`;
+}
+function labelHtml(o: OrderDetail) {
+  return `<div style="width:150mm;min-height:100mm;border:2px solid #222;border-radius:4px;padding:8mm;box-sizing:border-box">
+    <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px">Deliver to</div>
+    <div style="font-size:22px;line-height:1.35;margin:4px 0 14px">${addrHtml(o)}</div>
+    <div style="border-top:1px solid #999;padding-top:6px;font-size:11px;color:#444">If undelivered please return to: ${SHOP.name}, ${SHOP.lines.join(', ')}</div>
+    <div style="font-size:10px;color:#777;margin-top:4px">Ref ${h(o.invoice_number || '')} · eBay ${h(o.order_id)}</div>
+  </div>`;
+}
+
 type StockRow = { id: number; part_number: string; description: string; qty: number; rrp: number; offer_price: number; on_offer: number; photo: string; category: string };
 type Aspect = { name: string; mode: string; values: string[] };
 
@@ -48,6 +91,14 @@ export function EbaySettings() {
   const [syncMsg, setSyncMsg] = useState<SyncResult>(null);
   const [confirmEnd, setConfirmEnd] = useState<number | null>(null);
   const [listErr, setListErr] = useState('');
+  const [alertSet, setAlertSet] = useState(false);
+  const [alertUrl, setAlertUrl] = useState('');
+  const [alertMsg, setAlertMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [postFor, setPostFor] = useState<string | null>(null);
+  const [carrier, setCarrier] = useState('Isle of Man Post');
+  const [tracking, setTracking] = useState('');
+  const [postMsg, setPostMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [postBusy, setPostBusy] = useState(false);
 
   async function check() {
     setLoading(true); setErr('');
@@ -55,7 +106,7 @@ export function EbaySettings() {
     setLoading(false);
   }
   async function loadListings() {
-    try { const d = await api('/api/ebay/listings'); setListings(d.listings); setOrders(d.orders); setListErr(''); } catch (e: any) { setListErr(e.message); }
+    try { const d = await api('/api/ebay/listings'); setListings(d.listings); setOrders(d.orders); setAlertSet(!!d.alertSet); setListErr(''); } catch (e: any) { setListErr(e.message); }
   }
   useEffect(() => {
     const p = new URLSearchParams(window.location.search).get('ebay');
@@ -81,6 +132,29 @@ export function EbaySettings() {
   async function endListing(id: number) {
     setConfirmEnd(null);
     try { await api('/api/ebay/end', { id }); await loadListings(); } catch (e: any) { setListErr(e.message); }
+  }
+  async function printOrder(id: string, kind: 'slip' | 'label') {
+    try {
+      const o: OrderDetail = await api('/api/ebay/order/' + encodeURIComponent(id));
+      if (kind === 'slip') printHtml('Invoice ' + (o.invoice_number || ''), packingSlipHtml(o));
+      else printHtml('Address label ' + (o.invoice_number || ''), labelHtml(o));
+    } catch (e: any) { setListErr(e.message); }
+  }
+  async function markPosted(id: string) {
+    setPostBusy(true); setPostMsg(null);
+    try { const d = await api('/api/ebay/mark-posted', { order_id: id, carrier, tracking }); setPostMsg({ kind: 'ok', text: '✅ Marked as posted. ' + (d.note || '') }); setPostFor(null); setTracking(''); await loadListings(); }
+    catch (e: any) { setPostMsg({ kind: 'err', text: e.message }); }
+    setPostBusy(false);
+  }
+  async function saveAlert(clear = false) {
+    setAlertMsg(null);
+    try { const d = await api('/api/ebay/alert-link', { url: clear ? '' : alertUrl }); setAlertSet(d.set); setAlertUrl(''); setAlertMsg({ kind: 'ok', text: d.set ? '✅ Alert link saved.' : 'Alert link removed — no sale emails will be sent.' }); }
+    catch (e: any) { setAlertMsg({ kind: 'err', text: e.message }); }
+  }
+  async function testAlert() {
+    setAlertMsg(null);
+    try { await api('/api/ebay/alert-test', {}); setAlertMsg({ kind: 'ok', text: '✅ Test sent — an email should arrive in a minute or two.' }); }
+    catch (e: any) { setAlertMsg({ kind: 'err', text: e.message }); }
   }
   async function removeRecord(id: number) { try { await api('/api/ebay/remove-record', { id }); await loadListings(); } catch (e: any) { setListErr(e.message); } }
 
@@ -196,12 +270,61 @@ export function EbaySettings() {
                 <td style={{ textAlign: 'right' }}><button style={{ ...btn('#6b7280', true), padding: '2px 8px', fontSize: 11 }} onClick={() => removeRecord(l.id)}>Clear</button></td>
               </tr>))}</tbody></table>
           </>}
-          {orders.filter(o => o.sale_id).length > 0 && <>
-            <h4 style={{ fontSize: 14, margin: '16px 0 6px' }}>Recent eBay sales recorded</h4>
-            <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}><tbody>{orders.filter(o => o.sale_id).map(o => (
-              <tr key={o.order_id} style={{ borderBottom: '1px solid #f3f4f6' }}><td style={{ padding: 5 }}>{o.invoice_number}</td><td>{o.buyer}</td><td style={{ textAlign: 'right' }}>{gbp(o.total)}</td><td style={{ color: '#6b7280' }}>{o.postage ? '+ ' + gbp(o.postage) + ' postage' : ''}</td><td style={{ color: '#6b7280' }}>{o.created_at}</td></tr>
-            ))}</tbody></table>
-          </>}
+        </div>
+      )}
+
+      {/* 5. eBay orders to post */}
+      {s?.connected && (
+        <div style={card}>
+          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📮 5. eBay orders — pack & post</h3>
+          <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>Each eBay sale already has a paid invoice in Sylvia's. Print the invoice & packing slip and the address label, take the parcel to Isle of Man Post, then click <b>Mark as posted</b> — eBay emails the buyer.</p>
+          {postMsg && <Msg kind={postMsg.kind}>{postMsg.text}</Msg>}
+          {orders.length === 0 ? <div style={{ fontSize: 13, color: '#9ca3af' }}>No eBay sales yet.</div> : (
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+              <thead><tr style={{ textAlign: 'left', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}><th style={{ padding: 6 }}>Status</th><th>Invoice</th><th>Buyer</th><th style={{ textAlign: 'right' }}>Items</th><th style={{ textAlign: 'right' }}>Postage</th><th></th></tr></thead>
+              <tbody>{orders.map(o => (
+                <React.Fragment key={o.order_id}>
+                  <tr style={{ borderBottom: '1px solid #f3f4f6', verticalAlign: 'top' }}>
+                    <td style={{ padding: 6, whiteSpace: 'nowrap' }}>{o.status === 'posted' ? <span style={{ fontWeight: 700, color: '#16a34a' }}>✅ POSTED</span> : <span style={{ fontWeight: 700, color: '#d97706' }}>📦 TO POST</span>}{o.status === 'posted' && <div style={{ fontSize: 11, color: '#6b7280' }}>{o.carrier}{o.tracking ? ' · ' + o.tracking : ''}<br />{(o.posted_at || '').slice(0, 16)} {o.posted_by}</div>}</td>
+                    <td>{o.invoice_number}<div style={{ fontSize: 11, color: '#6b7280' }}>{(o.created_at || '').slice(0, 16)}</div></td>
+                    <td>{o.ship_name || o.buyer}{o.ship_address && <div style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'pre-line' }}>{o.ship_address}</div>}</td>
+                    <td style={{ textAlign: 'right' }}>{gbp(o.total)}</td>
+                    <td style={{ textAlign: 'right' }}>{gbp(o.postage)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+                        <button style={{ ...btn('#0064d2', true), padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => printOrder(o.order_id, 'slip')}>🖨️ Invoice & packing slip</button>
+                        <button style={{ ...btn('#0064d2', true), padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => printOrder(o.order_id, 'label')}>🏷️ Address label</button>
+                        {o.status !== 'posted' && postFor !== o.order_id && <button style={{ ...btn('#16a34a'), padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => { setPostFor(o.order_id); setPostMsg(null); setTracking(''); setCarrier('Isle of Man Post'); }}>✅ Mark as posted</button>}
+                      </div>
+                    </td>
+                  </tr>
+                  {postFor === o.order_id && <tr><td colSpan={6}>
+                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: 10, margin: '4px 0 8px', display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <div><span style={label}>Posted with</span><select style={{ ...input, width: 180 }} value={carrier} onChange={e => setCarrier(e.target.value)}>{['Isle of Man Post', 'Royal Mail', 'Parcelforce', 'DPD', 'Evri', 'Other'].map(c => <option key={c}>{c}</option>)}</select></div>
+                      <div style={{ flex: 1, minWidth: 180 }}><span style={label}>Tracking number (optional)</span><input style={input} value={tracking} onChange={e => setTracking(e.target.value.toUpperCase())} placeholder="Leave blank if none" /></div>
+                      <button style={{ ...btn('#16a34a'), opacity: postBusy ? 0.6 : 1 }} disabled={postBusy} onClick={() => markPosted(o.order_id)}>{postBusy ? 'Saving…' : 'Confirm posted'}</button>
+                      <button style={btn('#6b7280', true)} onClick={() => setPostFor(null)}>Cancel</button>
+                    </div>
+                  </td></tr>}
+                </React.Fragment>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* 6. Sale alert email */}
+      {s?.configured && (
+        <div style={card}>
+          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📧 6. Email me when something sells on eBay</h3>
+          <Row ok={alertSet} text="Sale alert link" detail={alertSet ? 'Saved — an email is sent for each new eBay sale' : 'Not set — paste the alert link from Tasklet below'} />
+          {alertMsg && <Msg kind={alertMsg.kind}>{alertMsg.text}</Msg>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+            <input style={{ ...input, flex: 1, minWidth: 220 }} value={alertUrl} onChange={e => setAlertUrl(e.target.value.trim())} placeholder={alertSet ? 'Paste a new link to replace it' : 'https://webhooks.tasklet.ai/…'} />
+            <button style={btn('#7c3aed')} disabled={!alertUrl} onClick={() => saveAlert()}>Save</button>
+            {alertSet && <button style={btn('#16a34a', true)} onClick={testAlert}>Send test</button>}
+            {alertSet && <button style={btn('#dc2626', true)} onClick={() => saveAlert(true)}>Remove</button>}
+          </div>
         </div>
       )}
     </div>
@@ -216,6 +339,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
   const [qty, setQty] = useState('1');
+  const [postage, setPostage] = useState('');
   const [catQ, setCatQ] = useState('');
   const [cats, setCats] = useState<{ id: string; name: string; path: string }[]>([]);
   const [catNote, setCatNote] = useState('');
@@ -262,7 +386,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
     setTitle(r.description.slice(0, 80));
     setDesc(r.description + (r.part_number ? '\n\nRef: ' + r.part_number : '') + "\n\nFrom Sylvia's Surprises — Antiques, Collectibles & More, Isle of Man.");
     setPrice(String(r.on_offer && r.offer_price > 0 ? r.offer_price : r.rrp || ''));
-    setQty('1');
+    setQty('1'); setPostage('');
     setCat(null); setCats([]); setAspects([]); setAspectVals({}); setConditions([]); setCondition('');
     setCatQ(r.category && r.category !== 'Other' ? r.category : r.description.split(' ').slice(0, 4).join(' '));
   }
@@ -289,11 +413,12 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
     const p = parseFloat(price); if (!(p > 0)) e.price = 'Enter a price';
     const n = parseInt(qty, 10); if (!(n >= 1)) e.qty = 'At least 1'; else if (n > item.qty) e.qty = 'Only ' + item.qty + ' in stock';
     if (!cat) e.cat = 'Choose an eBay category';
+    const pp = parseFloat(postage); if (postage.trim() === '' || !(pp >= 0)) e.postage = 'Enter the UK postage price (0 for free postage)';
     aspects.forEach(a => { if (!String(aspectVals[a.name] || '').trim()) e['a_' + a.name] = 'Required by eBay'; });
     setErrors(e); if (Object.keys(e).length) return;
     setBusy(true); setResult(null);
     try {
-      const d = await api('/api/ebay/list', { stock_id: item.id, title, description: desc, price: p, qty: n, category_id: cat!.id, condition, aspects: aspectVals });
+      const d = await api('/api/ebay/list', { stock_id: item.id, title, description: desc, price: p, qty: n, category_id: cat!.id, condition, aspects: aspectVals, postage: pp });
       setResult({ kind: 'ok', text: '✅ Listed on eBay' + (d.photo ? ' with ' + (d.photos || 1) + ' photo' + ((d.photos || 1) === 1 ? '' : 's') : ' (no photo — add some in Stock Control and list again for better sales)'), url: d.url });
       setItem(null); onListed();
     } catch (err: any) { setResult({ kind: 'err', text: err.message }); onListed(); }
@@ -341,9 +466,10 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
           <input style={input} value={title} maxLength={80} onChange={e => setTitle(e.target.value)} />{fe('title')}
           <span style={label}>Description</span>
           <textarea style={{ ...input, minHeight: 90 }} value={desc} onChange={e => setDesc(e.target.value)} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <div><span style={label}>Price (£)</span><input style={input} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value.replace(/[^\d.]/g, ''))} />{fe('price')}</div>
             <div><span style={label}>Quantity to list</span><input style={input} inputMode="numeric" value={qty} onChange={e => setQty(e.target.value.replace(/\D/g, ''))} />{fe('qty')}</div>
+            <div><span style={label}>UK postage (£)</span><input style={input} inputMode="decimal" value={postage} placeholder="e.g. 4.50" onChange={e => setPostage(e.target.value.replace(/[^\d.]/g, ''))} />{fe('postage')}<div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>What the buyer pays to post this item (0 = free)</div></div>
           </div>
           <span style={label}>eBay category</span>
           {cat ? (

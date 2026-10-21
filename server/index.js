@@ -359,6 +359,10 @@ app.post('/api/sql/query', requireAuth, (req, res) => {
   }
 });
 
+// eBay: when shop stock changes, end any eBay listing that is no longer available
+let ebayHooks = {};
+function afterWrite(sql) { try { if (/sylvias_stock\b/i.test(String(sql || '')) && ebayHooks.stockChanged) ebayHooks.stockChanged(); } catch (e) {} }
+
 // SQL Exec (INSERT/UPDATE/DELETE/CREATE/ALTER)
 app.post('/api/sql/exec', requireAuth, (req, res) => {
   try {
@@ -366,6 +370,7 @@ app.post('/api/sql/exec', requireAuth, (req, res) => {
     // Try as prepared statement first
     try {
       const info = db.prepare(sql).run();
+      afterWrite(sql);
       return res.json({ rowsAffected: info.changes, lastInsertRowid: Number(info.lastInsertRowid) });
     } catch (prepErr) {
       // If prepare fails (e.g. CREATE TABLE), use exec
@@ -387,6 +392,7 @@ app.post('/api/sql/batch', requireAuth, (req, res) => {
     for (const sql of statements) {
       try {
         db.exec(sql);
+        afterWrite(sql);
         results.push({ ok: true });
       } catch (err) {
         results.push({ ok: !err.message.includes('duplicate column') ? false : true, error: err.message });
@@ -500,7 +506,7 @@ app.post('/api/admin/reset', requireAuth, (req, res) => {
 });
 
 // ── eBay integration (connect, list, sync) ──
-require('./ebay')(app, db, requireAuth, { dbPath: DB_PATH });
+ebayHooks = require('./ebay')(app, db, requireAuth, { dbPath: DB_PATH }) || {};
 
 // ── DB Backup/Restore (admin only) ──
 app.get('/api/admin/db-backup', requireAuth, (req, res) => {
