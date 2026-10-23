@@ -9,7 +9,7 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
   const ENV = (process.env.EBAY_ENV || 'sandbox').toLowerCase() === 'production' ? 'production' : 'sandbox';
   const API = ENV === 'production' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com';
   const AUTH = ENV === 'production' ? 'https://auth.ebay.com' : 'https://auth.sandbox.ebay.com';
-  const VIEW = ENV === 'production' ? 'https://www.ebay.co.uk/itm/' : 'https://sandbox.ebay.co.uk/itm/';
+  const VIEW = ENV === 'production' ? 'https://www.ebay.co.uk/itm/' : 'https://sandbox.ebay.com/itm/';
   const MKT = 'EBAY_GB';
   const LOCATION_KEY = 'SYLVIAS_SHOP';
   const SCOPES = [
