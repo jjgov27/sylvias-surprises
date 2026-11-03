@@ -183,13 +183,24 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     {
       const cat = [{ name: 'ALL_EXCLUDING_MOTORS_VEHICLES' }];
       const tryCreate = async (label, fn) => { try { await fn(); steps.push(label + ' created'); } catch (e) { steps.push('❌ ' + label + ': ' + e.message); } };
-      const postageBody = (code) => ({ name: 'Sylvias Postage', description: 'Posted from the Isle of Man', marketplaceId: MKT, categoryTypes: cat, handlingTime: { value: 2, unit: 'DAY' }, shippingOptions: [{ optionType: 'DOMESTIC', costType: 'FLAT_RATE', shippingServices: [{ sortOrder: 1, shippingServiceCode: code, shippingCost: { value: '4.50', currency: 'GBP' } }] }] });
+      const postageBody = (code) => ({ name: 'Sylvias Postage', description: 'Free postage - included in price. Posted from the Isle of Man', marketplaceId: MKT, categoryTypes: cat, handlingTime: { value: 2, unit: 'DAY' }, shippingOptions: [{ optionType: 'DOMESTIC', costType: 'FLAT_RATE', shippingServices: [{ sortOrder: 1, shippingServiceCode: code, freeShipping: true, shippingCost: { value: '0.00', currency: 'GBP' } }] }] });
       if (!pol.fulfillment.length) await tryCreate('Postage policy (Sylvias Postage)', async () => {
         try { await ebay('POST', '/sell/account/v1/fulfillment_policy', postageBody('UK_SellersStandardRate')); }
         catch (e) { await ebay('POST', '/sell/account/v1/fulfillment_policy', postageBody('UK_RoyalMailSecondClassStandard')); }
       });
       if (!pol.payment.length) await tryCreate('Payment policy (Sylvias Payment)', () => ebay('POST', '/sell/account/v1/payment_policy', { name: 'Sylvias Payment', marketplaceId: MKT, categoryTypes: cat, immediatePay: true }));
       if (!pol.return.length) await tryCreate('Returns policy (Sylvias 30 Day Returns)', () => ebay('POST', '/sell/account/v1/return_policy', { name: 'Sylvias 30 Day Returns', marketplaceId: MKT, categoryTypes: cat, returnsAccepted: true, returnPeriod: { value: 30, unit: 'DAY' }, returnShippingCostPayer: 'BUYER', refundMethod: 'MONEY_BACK' }));
+      // If our own postage policy already exists but charges postage, switch it to free (postage is included in price).
+      for (const fp of pol.fulfillment.filter(x => x.name === 'Sylvias Postage')) {
+        try {
+          const d = await ebay('GET', '/sell/account/v1/fulfillment_policy/' + fp.id);
+          const svc = d?.shippingOptions?.[0]?.shippingServices?.[0];
+          if (svc && !svc.freeShipping) {
+            try { await ebay('PUT', '/sell/account/v1/fulfillment_policy/' + fp.id, postageBody(svc.shippingServiceCode)); steps.push('Postage policy changed to FREE postage'); }
+            catch (e) { steps.push('❌ Changing postage to free: ' + e.message); }
+          }
+        } catch (e) { /* ignore read errors */ }
+      }
       pol = await listPolicies();
     }
     // Shop location
@@ -303,7 +314,7 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     const postage = b.postage === '' || b.postage == null ? null : Number(b.postage);
     if (postage != null && !(postage >= 0)) throw new Error('Postage must be a number (0 for free postage)');
     const offer = { sku, marketplaceId: MKT, format: 'FIXED_PRICE', availableQuantity: qty, categoryId, listingDescription: description, merchantLocationKey: s.setup.location, pricingSummary: { price: { value: price.toFixed(2), currency: 'GBP' } }, listingPolicies: { fulfillmentPolicyId: s.setup.fulfillment.id, paymentPolicyId: s.setup.payment.id, returnPolicyId: s.setup.return.id } };
-    if (postage != null) offer.listingPolicies.shippingCostOverrides = [{ priority: 1, shippingServiceType: 'DOMESTIC', shippingCost: { value: postage.toFixed(2), currency: 'GBP' } }];
+    if (postage != null && postage > 0) offer.listingPolicies.shippingCostOverrides = [{ priority: 1, shippingServiceType: 'DOMESTIC', shippingCost: { value: postage.toFixed(2), currency: 'GBP' } }];
     let offerId;
     const existing = await ebay('GET', '/sell/inventory/v1/offer?sku=' + encodeURIComponent(sku) + '&marketplace_id=' + MKT).catch(() => ({}));
     if (existing.offers && existing.offers[0]) { offerId = existing.offers[0].offerId; await ebay('PUT', '/sell/inventory/v1/offer/' + offerId, offer); }

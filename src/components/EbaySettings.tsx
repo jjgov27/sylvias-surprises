@@ -362,7 +362,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
   const [desc, setDesc] = useState('');
   const [price, setPrice] = useState('');
   const [qty, setQty] = useState('1');
-  const [postage, setPostage] = useState('');
+  const [postage, setPostage] = useState('0');
   const [catQ, setCatQ] = useState('');
   const [cats, setCats] = useState<{ id: string; name: string; path: string }[]>([]);
   const [catNote, setCatNote] = useState('');
@@ -409,7 +409,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
     setTitle(r.description.slice(0, 80));
     setDesc(r.description + (r.part_number ? '\n\nRef: ' + r.part_number : '') + "\n\nFrom Sylvia's Surprises — Antiques, Collectibles & More, Isle of Man.");
     setPrice(String(r.on_offer && r.offer_price > 0 ? r.offer_price : r.rrp || ''));
-    setQty('1'); setPostage('');
+    setQty('1'); setPostage('0');
     setCat(null); setCats([]); setAspects([]); setAspectVals({}); setConditions([]); setCondition('');
     setCatQ(r.category && r.category !== 'Other' ? r.category : r.description.split(' ').slice(0, 4).join(' '));
   }
@@ -436,7 +436,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
     const p = parseFloat(price); if (!(p > 0)) e.price = 'Enter a price';
     const n = parseInt(qty, 10); if (!(n >= 1)) e.qty = 'At least 1'; else if (n > item.qty) e.qty = 'Only ' + item.qty + ' in stock';
     if (!cat) e.cat = 'Choose an eBay category';
-    const pp = parseFloat(postage); if (postage.trim() === '' || !(pp >= 0)) e.postage = 'Enter the UK postage price (0 for free postage)';
+    const pp = parseFloat(postage); if (postage.trim() === '' || !(pp >= 0)) e.postage = 'Enter 0 for free postage (included in price), or a postage charge';
     aspects.forEach(a => { if (!String(aspectVals[a.name] || '').trim()) e['a_' + a.name] = 'Required by eBay'; });
     setErrors(e); if (Object.keys(e).length) return;
     setBusy(true); setResult(null);
@@ -492,7 +492,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
             <div><span style={label}>Price (£)</span><input style={input} inputMode="decimal" value={price} onChange={e => setPrice(e.target.value.replace(/[^\d.]/g, ''))} />{fe('price')}</div>
             <div><span style={label}>Quantity to list</span><input style={input} inputMode="numeric" value={qty} onChange={e => setQty(e.target.value.replace(/\D/g, ''))} />{fe('qty')}</div>
-            <div><span style={label}>UK postage (£)</span><input style={input} inputMode="decimal" value={postage} placeholder="e.g. 4.50" onChange={e => setPostage(e.target.value.replace(/[^\d.]/g, ''))} />{fe('postage')}<div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>What the buyer pays to post this item (0 = free)</div></div>
+            <div><span style={label}>UK postage (£)</span><input style={input} inputMode="decimal" value={postage} placeholder="0" onChange={e => setPostage(e.target.value.replace(/[^\d.]/g, ''))} />{fe('postage')}<div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>0 = free postage (included in price). Only change this if the buyer should pay extra.</div></div>
           </div>
           <span style={label}>eBay category</span>
           {cat ? (
