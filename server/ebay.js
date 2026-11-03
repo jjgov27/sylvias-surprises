@@ -93,6 +93,10 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
       const d = await ebay('GET', '/commerce/taxonomy/v1/get_default_category_tree_id?marketplace_id=' + MKT, undefined, true);
       out.apiOk = true; out.categoryTreeId = d.categoryTreeId || null;
     } catch (e) { out.error = e.message; }
+    if (out.connected) {
+      try { const pv = await ebay('GET', '/sell/account/v1/privilege'); out.privilege = { registered: !!pv.sellerRegistrationCompleted, limit: pv.sellingLimit || null }; }
+      catch (e) { out.privilege = { error: e.message }; }
+    }
     res.json(out);
   });
 
@@ -310,7 +314,12 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     if (imgs.length) product.imageUrls = imgs;
     const item = { availability: { shipToLocationAvailability: { quantity: qty } }, product };
     if (b.condition) item.condition = b.condition;
-    await ebay('PUT', '/sell/inventory/v1/inventory_item/' + encodeURIComponent(sku), item);
+    try { await ebay('PUT', '/sell/inventory/v1/inventory_item/' + encodeURIComponent(sku), item); }
+    catch (e) {
+      let hint = '';
+      try { const pv = await ebay('GET', '/sell/account/v1/privilege'); if (!pv.sellerRegistrationCompleted) hint = ' — eBay says this account has not finished seller registration. On ebay.co.uk go to My eBay → Account → Seller account and complete any steps shown (payout bank details / ID check), then try again.'; } catch (_) {}
+      e.message = e.message + hint; throw e;
+    }
     const postage = b.postage === '' || b.postage == null ? null : Number(b.postage);
     if (postage != null && !(postage >= 0)) throw new Error('Postage must be a number (0 for free postage)');
     const offer = { sku, marketplaceId: MKT, format: 'FIXED_PRICE', availableQuantity: qty, categoryId, listingDescription: description, merchantLocationKey: s.setup.location, pricingSummary: { price: { value: price.toFixed(2), currency: 'GBP' } }, listingPolicies: { fulfillmentPolicyId: s.setup.fulfillment.id, paymentPolicyId: s.setup.payment.id, returnPolicyId: s.setup.return.id } };
