@@ -99,6 +99,10 @@ export function EbaySettings() {
   const [tracking, setTracking] = useState('');
   const [postMsg, setPostMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [postBusy, setPostBusy] = useState(false);
+  const [delInfo, setDelInfo] = useState<{ endpoint: string; token: string; notices: number } | null>(null);
+  const [copied, setCopied] = useState('');
+  async function showDeletion() { try { const r = await fetch('/api/ebay/deletion-info', { credentials: 'include' }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'Could not load'); setDelInfo(d); } catch (e: any) { setErr(e.message); } }
+  function copy(label: string, text: string) { navigator.clipboard?.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(''), 2000); }); }
 
   async function check() {
     setLoading(true); setErr('');
@@ -197,6 +201,25 @@ export function EbaySettings() {
             <div style={{ marginTop: 8, display: 'flex', gap: 8 }}><button style={btn('#dc2626')} onClick={disconnect}>Yes, disconnect</button><button style={btn('#6b7280', true)} onClick={() => setConfirmDisconnect(false)}>No</button></div>
           </div>
         )}
+      </div>
+
+      {/* Account deletion notice — needed once to switch on real (Production) eBay keys */}
+      <div style={card}>
+        <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>🧹 eBay account-deletion notice</h3>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>Only needed once, when switching on real eBay keys. eBay asks for a web address and a code — copy them from here into the eBay developer page (<b>Alerts &amp; Notifications → Marketplace account deletion</b>).</p>
+        {!delInfo && <button style={btn('#0f766e', true)} onClick={showDeletion}>Show web address &amp; code</button>}
+        {delInfo && <div style={{ display: 'grid', gap: 10 }}>
+          {([['Notification endpoint (web address)', delInfo.endpoint], ['Verification token (code)', delInfo.token]] as const).map(([label, val]) => (
+            <div key={label}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 3 }}>{label}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <code style={{ flex: 1, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 8px', fontSize: 12, wordBreak: 'break-all' }}>{val}</code>
+                <button style={btn('#0f766e')} onClick={() => copy(label, val)}>{copied === label ? '✅ Copied' : '📋 Copy'}</button>
+              </div>
+            </div>
+          ))}
+          <div style={{ fontSize: 12, color: '#6b7280' }}>Notices received from eBay so far: {delInfo.notices}</div>
+        </div>}
       </div>
 
       {/* 2. Seller setup */}

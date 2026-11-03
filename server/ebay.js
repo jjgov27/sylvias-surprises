@@ -96,6 +96,40 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     res.json(out);
   });
 
+  // ── Marketplace account deletion notifications (required by eBay for Production keys) ──
+  // eBay sends a GET with ?challenge_code=… to verify the endpoint, then POSTs a notice whenever an
+  // eBay user closes their account. We keep no eBay-user data beyond order addresses, so we just acknowledge.
+  const DELETION_FILE = path.join(path.dirname(opts.dbPath), 'ebay-deletion.json');
+  const DELETION_PATH = '/api/ebay/account-deletion';
+  function deletionToken() {
+    if (process.env.EBAY_DELETION_TOKEN) return process.env.EBAY_DELETION_TOKEN;
+    let d = {}; try { d = JSON.parse(fs.readFileSync(DELETION_FILE, 'utf8')); } catch {}
+    if (!d.token) { d.token = 'sylvias_' + crypto.randomBytes(24).toString('hex'); d.notices = 0; fs.writeFileSync(DELETION_FILE, JSON.stringify(d, null, 2), { mode: 0o600 }); }
+    return d.token;
+  }
+  function deletionEndpoint(req) {
+    if (process.env.EBAY_DELETION_ENDPOINT) return process.env.EBAY_DELETION_ENDPOINT;
+    return 'https://' + (req.get('x-forwarded-host') || req.get('host')) + DELETION_PATH;
+  }
+  app.get(DELETION_PATH, (req, res) => {
+    const code = req.query.challenge_code;
+    if (!code) return res.status(400).json({ error: 'challenge_code missing' });
+    const hash = crypto.createHash('sha256').update(String(code)).update(deletionToken()).update(deletionEndpoint(req)).digest('hex');
+    res.set('Content-Type', 'application/json').status(200).send(JSON.stringify({ challengeResponse: hash }));
+  });
+  app.post(DELETION_PATH, (req, res) => {
+    try {
+      let d = {}; try { d = JSON.parse(fs.readFileSync(DELETION_FILE, 'utf8')); } catch {}
+      d.notices = (d.notices || 0) + 1; d.last_notice = new Date().toISOString();
+      fs.writeFileSync(DELETION_FILE, JSON.stringify(d, null, 2), { mode: 0o600 });
+    } catch (e) {}
+    res.status(200).end();
+  });
+  app.get('/api/ebay/deletion-info', requireAuth, (req, res) => {
+    let d = {}; try { d = JSON.parse(fs.readFileSync(DELETION_FILE, 'utf8')); } catch {}
+    res.json({ endpoint: deletionEndpoint(req), token: deletionToken(), notices: d.notices || 0, lastNotice: d.last_notice || null });
+  });
+
   // ── connect (OAuth) ──
   const pendingStates = new Map();
   app.get('/api/ebay/connect', requireAuth, (req, res) => {
