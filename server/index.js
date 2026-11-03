@@ -559,6 +559,29 @@ app.post('/api/admin/db-restore', requireAuth, (req, res) => {
 
 // Serve React app
 const distPath = path.join(__dirname, '..', 'dist');
+
+// Public privacy policy page (required by eBay for Production sign-in)
+app.get(['/privacy', '/privacy-policy'], (req, res) => {
+  res.type('html').send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Privacy Policy - Sylvia's Surprises</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{color:#7a2a5a}h2{margin-top:28px;font-size:1.15em}</style></head><body>
+<h1>Privacy Policy</h1>
+<p><strong>Sylvia's Surprises</strong>, Memorial Hall, Main Road, Union Mills, Isle of Man, IM4 4AD. Telephone 07624 433076. Email gavin@sylviassurprises.im.</p>
+<h2>What we collect</h2>
+<p>When you buy from us in our shop or on eBay, we keep the details needed to complete your order: your name, delivery address, email or telephone number (if provided), the items bought, the price paid and postage/tracking details.</p>
+<h2>How we use it</h2>
+<p>Only to process, pack and post your order, provide invoices and receipts, handle returns or queries, and keep the business records we are legally required to keep. We do not sell or share your details for marketing.</p>
+<h2>eBay</h2>
+<p>Our shop system connects to our own eBay seller account to list our items and receive our orders. We only access information about our own listings and orders. If eBay tells us an account has been closed or deleted, we remove that buyer's personal details from our system, except where we must keep records for tax and accounting.</p>
+<h2>How long we keep it</h2>
+<p>Sales records are kept for as long as required for tax and accounting purposes (normally six years) and are then deleted.</p>
+<h2>Security</h2>
+<p>Records are stored on a secure, password-protected system accessible only to our staff.</p>
+<h2>Your rights</h2>
+<p>You can ask to see, correct or delete the personal details we hold about you by contacting us using the details above.</p>
+<p style="color:#777;font-size:.9em;margin-top:40px">Last updated November 2026.</p>
+</body></html>`);
+});
+
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
   app.get('*', (req, res) => {
