@@ -402,7 +402,7 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
     const phone = st.primaryPhone?.phoneNumber || '';
     const li = lines.map(x => ({ lineItemId: x.li.lineItemId, quantity: x.q, title: x.stock?.description || x.li.title || '', part_number: x.stock?.part_number || '', unit: x.unit, total: x.lineTotal }));
     db.prepare(`INSERT INTO sylvias_ebay_orders (order_id, sale_id, buyer, total, postage, note, ship_name, ship_address, ship_phone, buyer_username, line_items, status) VALUES (?,?,?,?,?,?,?,?,?,?,?, 'to_post')`).run(order.orderId, saleId, custName, total, postage, inv, st.fullName || '', addr, phone, buyer, JSON.stringify(li));
-    return { orderId: order.orderId, invoice: inv, total, postage, buyer: st.fullName || buyer, address: addr, items: li.map(x => (x.part_number ? x.part_number + ' ' : '') + x.title + (x.quantity > 1 ? ' ×' + x.quantity : '')) };
+    return { invoice: inv, total, postage, buyer: st.fullName || buyer, address: addr, items: li.map(x => (x.part_number ? x.part_number + ' ' : '') + x.title + (x.quantity > 1 ? ' ×' + x.quantity : '')) };
   });
 
   let syncing = false;
@@ -429,7 +429,6 @@ module.exports = function setupEbay(app, db, requireAuth, opts) {
       const s = load(); s.last_sync = result; save(s);
     }
     if (result.newSales.length) notifySales(result.newSales).catch(e => console.error('eBay alert:', e.message));
-    if (result.newSales.length && opts.onNewSales) Promise.resolve(opts.onNewSales(result.newSales.map(x => x.orderId))).catch(e => console.error('ePrint:', e.message));
     return result;
   }
 
