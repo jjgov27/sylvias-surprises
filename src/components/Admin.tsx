@@ -58,7 +58,7 @@ const CLEARABLE_TABLES: { table: string; label: string; icon: string; danger?: b
 type Tab = 'staff' | 'business' | 'bank' | 'categories' | 'maintenance' | 'duplicates' | 'email' | 'snags' | 'ebay' | 'reset';
 
 export function Admin({ currentUser }: Props) {
-  const [tab, setTab] = useState<Tab>((new URLSearchParams(window.location.search).get('ebay') || (() => { try { return sessionStorage.getItem('ebay_list_stock_id'); } catch { return null; } })()) ? 'ebay' : 'business');
+  const [tab, setTab] = useState<Tab>(new URLSearchParams(window.location.search).get('ebay') ? 'ebay' : 'business');
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [dirty, setDirty] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState('');
@@ -241,7 +241,7 @@ export function Admin({ currentUser }: Props) {
           { id: 'duplicates' as Tab, label: '🔍 Duplicate Checker' },
           { id: 'email' as Tab, label: '📧 Email Settings' },
           { id: 'snags' as Tab, label: '🐛 Snag Tracker' },
-          { id: 'ebay' as Tab, label: '🛒 eBay' },
+          { id: 'ebay' as Tab, label: '🛒 eBay setup' },
           { id: 'reset' as Tab, label: '🧹 Data Reset' },
         ]).map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}

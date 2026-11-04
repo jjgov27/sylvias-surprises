@@ -76,7 +76,8 @@ const Msg = ({ kind, children }: { kind: 'ok' | 'err' | 'info'; children: React.
   <div style={{ background: kind === 'ok' ? '#f0fdf4' : kind === 'err' ? '#fef2f2' : '#eff6ff', color: kind === 'ok' ? '#166534' : kind === 'err' ? '#dc2626' : '#1e40af', border: '1px solid ' + (kind === 'ok' ? '#bbf7d0' : kind === 'err' ? '#fecaca' : '#bfdbfe'), padding: '8px 12px', borderRadius: 8, fontSize: 13, margin: '8px 0' }}>{children}</div>
 );
 
-export function EbaySettings() {
+export function EbaySettings({ mode = 'admin', onOpenAdmin }: { mode?: 'admin' | 'selling'; onOpenAdmin?: () => void } = {}) {
+  const selling = mode === 'selling';
   const [s, setS] = useState<Status | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
@@ -176,8 +177,13 @@ export function EbaySettings() {
         </Msg>
       )}
 
+      {selling && <div style={{ ...card, background: '#eff6ff', borderColor: '#bfdbfe' }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 20 }}>🛒 eBay Selling</h2>
+        <div style={{ fontSize: 13, color: '#374151' }}>Choose an item to put on eBay, see what’s listed, and pack &amp; post eBay orders.{s && !loading && !ready && <> <b style={{ color: '#b91c1c' }}>eBay isn’t fully set up yet</b> — {onOpenAdmin ? <a href="#" onClick={e => { e.preventDefault(); onOpenAdmin(); }} style={{ color: '#0064d2' }}>open Admin → 🛒 eBay setup</a> : 'see Admin → 🛒 eBay setup'}.</>}</div>
+      </div>}
+
       {/* 1. Connection */}
-      <div style={card}>
+      {!selling && <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <h3 style={{ margin: 0, fontSize: 17 }}>🛒 1. eBay Connection</h3>
           {s && <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: sandbox ? '#fef3c7' : '#dcfce7', color: sandbox ? '#92400e' : '#166534' }}>{sandbox ? '🧪 Practice site (Sandbox)' : '🟢 Real eBay (Production)'}</span>}
@@ -201,10 +207,10 @@ export function EbaySettings() {
             <div style={{ marginTop: 8, display: 'flex', gap: 8 }}><button style={btn('#dc2626')} onClick={disconnect}>Yes, disconnect</button><button style={btn('#6b7280', true)} onClick={() => setConfirmDisconnect(false)}>No</button></div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Account deletion notice — needed once to switch on real (Production) eBay keys */}
-      <div style={card}>
+      {!selling && <div style={card}>
         <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>🧹 eBay account-deletion notice</h3>
         <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>Only needed once, when switching on real eBay keys. eBay asks for a web address and a code — copy them from here into the eBay developer page (<b>Alerts &amp; Notifications → Marketplace account deletion</b>).</p>
         {!delInfo && <button style={btn('#0f766e', true)} onClick={showDeletion}>Show web address &amp; code</button>}
@@ -220,10 +226,10 @@ export function EbaySettings() {
           ))}
           <div style={{ fontSize: 12, color: '#6b7280' }}>Notices received from eBay so far: {delInfo.notices}</div>
         </div>}
-      </div>
+      </div>}
 
       {/* 2. Seller setup */}
-      {s?.connected && (
+      {!selling && s?.connected && (
         <div style={card}>
           <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>⚙️ 2. Seller account setup</h3>
           <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>Checks the eBay account has postage, payment and returns policies and adds the shop as the item location.{sandbox ? ' On the practice site, simple policies are created automatically.' : ''}</p>
@@ -249,13 +255,13 @@ export function EbaySettings() {
       )}
 
       {/* 3. List an item */}
-      {ready && <ListItem onListed={loadListings} listedIds={new Set(activeListings.map(l => l.stock_id))} />}
+      {selling && ready && <ListItem onListed={loadListings} listedIds={new Set(activeListings.map(l => l.stock_id))} />}
 
       {/* 4. Listings + sync */}
-      {s?.connected && (
+      {selling && s?.connected && (
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 17 }}>📦 4. eBay listings & sales</h3>
+            <h3 style={{ margin: 0, fontSize: 17 }}>📦 On eBay now & sales sync</h3>
             <button style={{ ...btn('#16a34a'), opacity: syncBusy ? 0.6 : 1 }} disabled={syncBusy} onClick={syncNow}>{syncBusy ? 'Syncing…' : '🔄 Sync with eBay now'}</button>
           </div>
           <p style={{ fontSize: 12, color: '#6b7280', margin: '6px 0' }}>Syncs automatically every 10 minutes: eBay sales are recorded as paid sales (payment “eBay”) and taken out of stock; items sold in the shop have their eBay listing ended.</p>
@@ -297,9 +303,9 @@ export function EbaySettings() {
       )}
 
       {/* 5. eBay orders to post */}
-      {s?.connected && (
+      {selling && s?.connected && (
         <div style={card}>
-          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📮 5. eBay orders — pack & post</h3>
+          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📮 eBay orders — pack & post</h3>
           <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>Each eBay sale already has a paid invoice in Sylvia's. Print the invoice & packing slip and the address label, take the parcel to Isle of Man Post, then click <b>Mark as posted</b> — eBay emails the buyer.</p>
           {postMsg && <Msg kind={postMsg.kind}>{postMsg.text}</Msg>}
           {orders.length === 0 ? <div style={{ fontSize: 13, color: '#9ca3af' }}>No eBay sales yet.</div> : (
@@ -336,10 +342,12 @@ export function EbaySettings() {
         </div>
       )}
 
+      {!selling && s?.connected && <div style={{ ...card, background: '#eff6ff', borderColor: '#bfdbfe', fontSize: 13 }}>To <b>list items</b>, see <b>what’s on eBay</b> or <b>pack &amp; post orders</b>, use <b>🛒 eBay Selling</b> in the main menu.</div>}
+
       {/* 6. Sale alert email */}
-      {s?.configured && (
+      {!selling && s?.configured && (
         <div style={card}>
-          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📧 6. Email me when something sells on eBay</h3>
+          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📧 3. Email me when something sells on eBay</h3>
           <Row ok={alertSet} text="Sale alert link" detail={alertSet ? 'Saved — an email is sent for each new eBay sale' : 'Not set — paste the alert link from Tasklet below'} />
           {alertMsg && <Msg kind={alertMsg.kind}>{alertMsg.text}</Msg>}
           <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -451,7 +459,7 @@ function ListItem({ onListed, listedIds }: { onListed: () => void; listedIds: Se
 
   return (
     <div style={card}>
-      <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📤 3. List an item on eBay</h3>
+      <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>📤 List an item on eBay</h3>
       {result && <Msg kind={result.kind}>{result.text} {result.url && <a href={result.url} target="_blank" rel="noreferrer" style={{ color: '#0064d2', fontWeight: 600 }}>View on eBay ↗</a>}</Msg>}
       {!item && (
         <div style={{ position: 'relative' }}>

@@ -40,6 +40,7 @@ import { GiftVouchers } from './components/GiftVouchers';
 import { QuickStockEntry } from './components/QuickStockEntry';
 import { ScanReview } from './components/ScanReview';
 import { EbayExport } from './components/EbayExport';
+import { EbaySettings } from './components/EbaySettings';
 import { StockCheck } from './components/StockCheck';
 import BulkStockEntry from './components/BulkStockEntry';
 import { StockValuation } from './components/StockValuation';
@@ -121,7 +122,8 @@ const NAV_GROUPS: NavGroup[] = [
       { id: 'accountant-report', label: 'Accountant Report', icon: <BarChart3 size={16} /> },
       { id: 'event-tracker', label: 'Event Tracker', icon: <CalendarDays size={18} /> },
       { id: 'insurance-register', label: 'Insurance Register', icon: <Shield size={18} /> },
-      { id: 'ebay-export', label: 'eBay Export', icon: <ShoppingBag size={18} /> },
+      { id: 'ebay-selling', label: 'eBay Selling', icon: <ShoppingCart size={18} /> },
+      { id: 'ebay-export', label: 'eBay Export (CSV)', icon: <ShoppingBag size={18} /> },
       { id: 'admin', label: 'Admin & Settings', icon: <Settings size={18} /> },
     ],
   },
@@ -334,6 +336,7 @@ export default function App() {
     { id: 'profit-dashboard' as ViewMode, label: 'Profit Dashboard', desc: 'Performance overview', icon: <TrendingUp size={36} />, color: 'from-indigo-500 to-indigo-700' },
     { id: 'gift-vouchers' as ViewMode, label: 'Gift Vouchers', desc: 'Issue & manage', icon: <Gift size={36} />, color: 'from-pink-500 to-pink-700' },
     { id: 'stock-check' as ViewMode, label: 'Stock Check', desc: 'Verify inventory', icon: <ClipboardCheck size={36} />, color: 'from-lime-500 to-lime-700' },
+    { id: 'ebay-selling' as ViewMode, label: 'eBay Selling', desc: 'List, track & post eBay items', icon: <ShoppingCart size={36} />, color: 'from-sky-500 to-blue-700' },
     { id: 'ebay-export' as ViewMode, label: 'eBay Export', desc: 'List items on eBay', icon: <ShoppingBag size={36} />, color: 'from-blue-500 to-blue-700' },
     { id: 'bulk-stock-entry' as ViewMode, label: 'Bulk Entry', desc: 'Spreadsheet-style stock entry', icon: <Layers size={36} />, color: 'from-violet-500 to-violet-700' },
     { id: 'admin' as ViewMode, label: 'Settings', desc: 'Admin & config', icon: <Settings size={36} />, color: 'from-slate-500 to-slate-700' },
@@ -865,6 +868,8 @@ export default function App() {
           <StockRemovals currentUser={currentUser} />
         ) : view === 'out-of-stock' ? (
           <OutOfStock currentUser={currentUser} onEdit={handleEdit} />
+        ) : view === 'ebay-selling' ? (
+          <EbaySettings mode="selling" onOpenAdmin={() => setView('admin')} />
         ) : view === 'ebay-export' ? (
           <EbayExport currentUser={currentUser} />
         ) : (
@@ -872,7 +877,7 @@ export default function App() {
             currentUser={currentUser}
             onEdit={handleEdit}
             onAddNew={handleAddNew}
-            onListOnEbay={(it) => { try { sessionStorage.setItem('ebay_list_stock_id', String(it.id)); } catch {} setView('admin'); }}
+            onListOnEbay={(it) => { try { sessionStorage.setItem('ebay_list_stock_id', String(it.id)); } catch {} setView('ebay-selling'); }}
           />
         )}
       </main>

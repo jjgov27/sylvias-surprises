@@ -31,6 +31,7 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
   const [cost, setCost] = useState('');
   const [rrp, setRrp] = useState('');
   const [category, setCategory] = useState('Other');
+  const [alsoEbay, setAlsoEbay] = useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -342,6 +343,14 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
         else photoWarn = ' (extra photos not saved — open the item and add them again)';
       } catch { photoWarn = ' (extra photos not saved — open the item and add them again)'; }
     };
+    let goEbay = false;
+    const queueEbay = async () => {
+      if (!alsoEbay) return;
+      try {
+        const rows = await window.tasklet.sqlQuery('SELECT id, description FROM sylvias_stock ORDER BY id DESC LIMIT 1') as any[];
+        if (rows[0] && String(rows[0].description) === description.trim()) { sessionStorage.setItem('ebay_list_stock_id', String(rows[0].id)); goEbay = true; }
+      } catch {}
+    };
     try {
       if (editItem) {
         await updateStockItem({
@@ -374,6 +383,7 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
           no_partnumber_initials: npi,
         });
         await attachNewPhotos();
+        await queueEbay();
         // If on account, create a supplier invoice
         if (onAccount) {
           const totalCost = (parseFloat(cost) || 0) * (parseInt(qty) || 1);
@@ -404,11 +414,13 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
           no_partnumber_initials: npi,
         });
         await attachNewPhotos();
+        await queueEbay();
         setSuccess('Item added to stock! ✅' + photoWarn);
         resetForm();
       }
 
-      setTimeout(() => { onSaved(); }, 800);
+      if (goEbay && onNavigate) { setSuccess(s => s + ' Opening eBay listing…'); setAlsoEbay(false); setTimeout(() => onNavigate('ebay-selling'), 800); }
+      else setTimeout(() => { onSaved(); }, 800);
     } catch (err) {
       console.error('Failed to save stock item:', err);
       setError('Failed to save. Please try again.');
@@ -754,6 +766,14 @@ export const StockEntry: React.FC<StockEntryProps> = ({ currentUser, editItem, o
             )}
             {photoError && <p className="text-error text-sm mt-1">{photoError}</p>}
           </div>
+
+          {/* Also list on eBay */}
+          {!editItem && (
+            <label className="flex items-center gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50 cursor-pointer">
+              <input type="checkbox" className="checkbox checkbox-primary" checked={alsoEbay} onChange={e => setAlsoEbay(e.target.checked)} />
+              <span className="text-sm"><b>🛒 Also put this item on eBay</b><br /><span className="text-base-content/70">After saving, the eBay listing form opens with this item and its photos filled in.</span></span>
+            </label>
+          )}
 
           {/* Entered By (read-only) */}
           <div className="form-control">
