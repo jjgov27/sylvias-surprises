@@ -506,7 +506,8 @@ app.post('/api/admin/reset', requireAuth, (req, res) => {
 });
 
 // ── eBay integration (connect, list, sync) ──
-ebayHooks = require('./ebay')(app, db, requireAuth, { dbPath: DB_PATH }) || {};
+const eprintHooks = require('./eprint')(app, db, requireAuth) || {};
+ebayHooks = require('./ebay')(app, db, requireAuth, { dbPath: DB_PATH, onNewSales: (ids) => eprintHooks.autoPrint && eprintHooks.autoPrint(ids) }) || {};
 
 // ── DB Backup/Restore (admin only) ──
 app.get('/api/admin/db-backup', requireAuth, (req, res) => {

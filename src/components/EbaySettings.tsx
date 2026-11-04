@@ -161,6 +161,16 @@ export function EbaySettings({ mode = 'admin', onOpenAdmin }: { mode?: 'admin' |
     try { await api('/api/ebay/alert-test', {}); setAlertMsg({ kind: 'ok', text: '✅ Test sent — an email should arrive in a minute or two.' }); }
     catch (e: any) { setAlertMsg({ kind: 'err', text: e.message }); }
   }
+  const [ep, setEp] = useState<{ printer: string; auto: boolean; senderReady: boolean; sender: string; recent: { invoice: string; status: string; note: string; created_at: string }[] } | null>(null);
+  const [epEmail, setEpEmail] = useState('');
+  const [epAuto, setEpAuto] = useState(true);
+  const [epMsg, setEpMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [epBusy, setEpBusy] = useState('');
+  async function loadEp() { try { const r = await fetch('/api/eprint/settings', { credentials: 'include' }); if (!r.ok) return; const d = await r.json(); setEp(d); setEpEmail(d.printer || ''); setEpAuto(!!d.auto); } catch {} }
+  useEffect(() => { loadEp(); }, []);
+  async function saveEp() { setEpMsg(null); try { await api('/api/eprint/settings', { printer: epEmail.trim().toLowerCase(), auto: epAuto }); setEpMsg({ kind: 'ok', text: '✅ Printer settings saved.' }); await loadEp(); } catch (e: any) { setEpMsg({ kind: 'err', text: e.message }); } }
+  async function testEp() { setEpMsg(null); setEpBusy('test'); try { const d = await api('/api/eprint/test', {}); setEpMsg({ kind: 'ok', text: '✅ Test page emailed to ' + d.to + ' — it should print within a few minutes if the printer is on.' }); } catch (e: any) { setEpMsg({ kind: 'err', text: e.message }); } setEpBusy(''); await loadEp(); }
+  async function sendToPrinter(id: string) { setPostMsg(null); setEpBusy(id); try { const d = await api('/api/eprint/order', { order_id: id }); setPostMsg({ kind: 'ok', text: '✅ Invoice ' + d.invoice + ' & packing slip emailed to the shop printer.' }); } catch (e: any) { setPostMsg({ kind: 'err', text: e.message }); } setEpBusy(''); }
   async function removeRecord(id: number) { try { await api('/api/ebay/remove-record', { id }); await loadListings(); } catch (e: any) { setListErr(e.message); } }
 
   const sandbox = s?.env !== 'production';
@@ -323,6 +333,7 @@ export function EbaySettings({ mode = 'admin', onOpenAdmin }: { mode?: 'admin' |
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
                         <button style={{ ...btn('#0064d2', true), padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => printOrder(o.order_id, 'slip')}>🖨️ Invoice & packing slip</button>
                         <button style={{ ...btn('#0064d2', true), padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => printOrder(o.order_id, 'label')}>🏷️ Address label</button>
+                        {ep?.printer && ep?.senderReady && <button style={{ ...btn('#7c3aed', true), padding: '4px 10px', whiteSpace: 'nowrap', opacity: epBusy === o.order_id ? 0.6 : 1 }} disabled={!!epBusy} onClick={() => sendToPrinter(o.order_id)}>{epBusy === o.order_id ? 'Sending…' : '📠 Send to shop printer'}</button>}
                         {o.status !== 'posted' && postFor !== o.order_id && <button style={{ ...btn('#16a34a'), padding: '4px 10px', whiteSpace: 'nowrap' }} onClick={() => { setPostFor(o.order_id); setPostMsg(null); setTracking(''); setCarrier('Isle of Man Post'); }}>✅ Mark as posted</button>}
                       </div>
                     </td>
@@ -356,6 +367,27 @@ export function EbaySettings({ mode = 'admin', onOpenAdmin }: { mode?: 'admin' |
             {alertSet && <button style={btn('#16a34a', true)} onClick={testAlert}>Send test</button>}
             {alertSet && <button style={btn('#dc2626', true)} onClick={() => saveAlert(true)}>Remove</button>}
           </div>
+        </div>
+      )}
+      {/* 7. Auto-print to HP printer */}
+      {!selling && (
+        <div style={card}>
+          <h3 style={{ margin: '0 0 6px', fontSize: 17 }}>🖨️ 4. Print eBay orders automatically</h3>
+          <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 8px' }}>When an eBay sale comes in, the invoice (page 1) and packing slip (page 2) are emailed to the shop's HP printer, so they're waiting in the tray. Each site keeps its own printer address.</p>
+          <Row ok={!!ep?.senderReady} text="Sending email account" detail={ep?.senderReady ? 'Ready — sends from ' + ep.sender : 'Not set up on this site yet (ask Tasklet)'} />
+          <Row ok={!!ep?.printer} text="Printer email address" detail={ep?.printer ? ep.printer : 'Not set — find it in the HP Smart app (ends @hpeprint.com)'} />
+          {epMsg && <Msg kind={epMsg.kind}>{epMsg.text}</Msg>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input style={{ ...input, flex: 1, minWidth: 220 }} value={epEmail} onChange={e => setEpEmail(e.target.value.trim().toLowerCase())} placeholder="xxxxxxxx@hpeprint.com" />
+            <label style={{ fontSize: 13, display: 'flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}><input type="checkbox" checked={epAuto} onChange={e => setEpAuto(e.target.checked)} /> Print each new eBay sale automatically</label>
+            <button style={btn('#7c3aed')} onClick={saveEp}>Save</button>
+            {ep?.printer && ep?.senderReady && <button style={{ ...btn('#16a34a', true), opacity: epBusy === 'test' ? 0.6 : 1 }} disabled={!!epBusy} onClick={testEp}>{epBusy === 'test' ? 'Sending…' : 'Send test print'}</button>}
+          </div>
+          {ep?.recent && ep.recent.length > 0 && <div style={{ marginTop: 10, fontSize: 12 }}>
+            <div style={{ color: '#6b7280', marginBottom: 4 }}>Recent print emails</div>
+            {ep.recent.map((r, i) => <div key={i} style={{ color: r.status === 'sent' ? '#166534' : '#b91c1c' }}>{r.status === 'sent' ? '✅' : '⚠️'} {(r.created_at || '').slice(0, 16)} · {r.invoice} · {r.note}</div>)}
+          </div>}
+          <p style={{ fontSize: 11, color: '#9ca3af', margin: '8px 0 0' }}>The printer must allow emails from the sending address (HP Smart → printer → Print Anywhere / ePrint → allowed senders).</p>
         </div>
       )}
     </div>
